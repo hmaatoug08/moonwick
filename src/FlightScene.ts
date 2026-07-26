@@ -28,76 +28,75 @@ import { Sfx } from "./sfx";
 import { ensureTextures, LIGHT_KEY, LIGHT_SIZE, SPARK_KEY } from "./textures";
 import { buttonWidth, fitText } from "./ui";
 
-/** Paramètres interpolés du moment : difficulté + ambiance du ciel. */
+/** Current interpolated parameters: difficulty + sky mood. */
 type TierParams = Difficulty & { skyTop: number; skyBottom: number };
 
 const MOON_X = WORLD.width - 70;
 const MOON_Y = 90;
 const MOON_COLOR = 0xf5efd8;
 
-/** Bande libre où se balade la sorcière de l'écran de mort (au-dessus du texte). */
+/** Free band where the death-screen witch roams (above all the text). */
 const DEATH_WITCH_Y = 168;
 
 /**
- * Profondeurs — INVARIANT de lisibilité : l'overlay d'assombrissement (2) est
- * SOUS les obstacles et leurs halos (3, voir obstacles.ts), la traînée (4) et
- * la sorcière (5). Il n'assombrit que le fond et le décor (0-1).
+ * Depths — readability INVARIANT: the darkening overlay (2) sits UNDER the
+ * obstacles and their halos (3, see obstacles.ts), the trail (4) and the
+ * witch (5). It only darkens the background and scenery (0-1).
  */
 const DEPTH_AMBIENT = 1;
 const DEPTH_DARKNESS = 2;
 
 /**
- * PHASE 4 — game feel.
- * Le score vient EXCLUSIVEMENT des frôlements. La traînée à particules est
- * l'indicateur principal du multiplicateur (le chiffre du HUD n'est qu'un
- * rappel), le frôlement secoue légèrement la caméra et siffle, un frôlement
- * extrême déclenche un ralenti, et le plafond de combo bascule la scène en
- * Pleine Lune.
+ * The main gameplay scene.
+ * Score comes EXCLUSIVELY from grazes. The particle trail is the primary
+ * indicator of the multiplier (the HUD number is only a reminder); a graze
+ * nudges the camera and whistles, an extreme graze triggers slow motion, and
+ * hitting the combo cap flips the scene into Full Moon.
  *
- * La jauge de magie NE TUE PAS : c'est le minuteur du multiplicateur, et
- * l'assombrissement qui l'accompagne est du pur retour visuel.
- * On ne meurt qu'en touchant un obstacle.
+ * The magic gauge DOES NOT KILL: it is the multiplier timer, and the
+ * darkening that goes with it is pure visual feedback.
+ * You only die by touching an obstacle.
  */
 export class FlightScene extends Phaser.Scene {
   private witch!: Phaser.GameObjects.Arc;
   private velocityY = 0;
   private holding = false;
-  /** false = le doigt actuellement posé ne pilote pas (tap de relance). */
+  /** false = the finger currently down does not steer (it was a replay tap). */
   private armed = true;
   private spawner!: ObstacleSpawner;
 
   private score = 0;
   private combo = 0;
-  /** Obstacles dépassés depuis le début de la traversée en obscurité courante. */
+  /** Obstacles passed since the start of the current run through the dark. */
   private darkStreak = 0;
-  /** Jauge de magie, en secondes restantes. À 0 le multiplicateur retombe. */
+  /** Magic gauge, in seconds left. At 0 the multiplier drops back. */
   private magic: number = MAGIC.max;
-  /** Phase de l'onde de vacillement, avance tant qu'on vacille. */
+  /** Flicker wave phase; advances for as long as we are flickering. */
   private flickerPhase = 0;
   private dead = false;
   private deathAt = 0;
 
-  /** Temps de jeu écoulé (s) — pilote les paliers. Gelé à la mort. */
+  /** Elapsed play time (s) — drives the tiers. Frozen on death. */
   private runTime = 0;
   private tierIndex = 0;
-  /** Paramètres au moment du dernier changement de palier (départ du lerp). */
+  /** Parameters at the last tier change (the lerp's starting point). */
   private diffFrom!: TierParams;
-  /** Paramètres effectifs du frame courant. */
+  /** Effective parameters for the current frame. */
   private diffCurrent!: TierParams;
   private transitionT: number = TIER_FX.transitionS;
 
-  /** Secondes de ralenti restantes. */
+  /** Seconds of slow motion left. */
   private slowMoLeft = 0;
-  /** Le système demande des animations réduites : ni shake ni ralenti. */
+  /** The system asks for reduced motion: no shake, no slow motion. */
   private reducedMotion = false;
   private fullMoon = false;
   private readonly sfx = new Sfx();
 
   private trailEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
   private ambient!: Phaser.GameObjects.Particles.ParticleEmitter;
-  /** Clé du dernier état d'ambiance appliqué (évite les redessins inutiles). */
+  /** Key of the last mood state applied (avoids pointless redraws). */
   private lastAmbianceKey = "";
-  /** Alpha courant du liseré des obstacles (monte quand la lumière baisse). */
+  /** Current obstacle outline alpha (rises as the light fades). */
   private obstacleStrokeAlpha: number = OBSTACLES.colors.strokeAlphaLit;
   private sky!: Phaser.GameObjects.Graphics;
   private tierText!: Phaser.GameObjects.Text;
@@ -126,16 +125,16 @@ export class FlightScene extends Phaser.Scene {
   private shareZone!: Phaser.Geom.Rectangle;
   private homeZone!: Phaser.Geom.Rectangle;
 
-  /** Décor animé de l'écran de mort : même esprit que l'accueil. */
+  /** Animated death-screen scenery: same spirit as the home screen. */
   private deathScene: Phaser.GameObjects.GameObject[] = [];
   private deathWitch!: Phaser.GameObjects.Arc;
   private deathDust!: Phaser.GameObjects.Particles.ParticleEmitter;
   private deathTrail!: Phaser.GameObjects.Particles.ParticleEmitter;
-  /** Meilleur combo atteint dans la run courante. */
+  /** Best combo reached in the current run. */
   private bestComboThisRun = 0;
-  /** Palier le plus loin atteint dans la run courante. */
+  /** Furthest tier reached in the current run. */
   private bestTierThisRun = 0;
-  /** La dernière run a battu le record (pour l'image de partage). */
+  /** The last run beat the record (used by the share image). */
   private lastRunWasRecord = false;
   private fpsText?: Phaser.GameObjects.Text;
   private debugGfx?: Phaser.GameObjects.Graphics;
@@ -143,11 +142,11 @@ export class FlightScene extends Phaser.Scene {
   private lastDrawnScore = -1;
   private lastDrawnCombo = -1;
 
-  /** Apprentissage première partie : actif tant qu'aucun frôlement réussi. */
+  /** First-run onboarding: active until the first successful graze. */
   private teaching = false;
   private teachText!: Phaser.GameObjects.Text;
 
-  /** Pause (onglet en arrière-plan) : le monde est gelé, on ne meurt pas. */
+  /** Pause (tab in the background): the world is frozen, you cannot die. */
   private paused = false;
   private pausePanel!: Phaser.GameObjects.Container;
   private onVisibilityChange?: () => void;
@@ -160,16 +159,16 @@ export class FlightScene extends Phaser.Scene {
     return Math.min(1 + this.combo * NEAR_MISS.multiplierStep, NEAR_MISS.multiplierMax);
   }
 
-  /** 0 à ×1, 1 au plafond : pilote toute l'intensité visuelle. */
+  /** 0 at x1, 1 at the cap: drives every visual intensity. */
   private get comboRatio(): number {
     const span = NEAR_MISS.multiplierMax - 1;
     return span <= 0 ? 1 : Phaser.Math.Clamp((this.multiplier - 1) / span, 0, 1);
   }
 
   /**
-   * Vacillement = dernière ligne droite avant la perte du multiplicateur.
-   * C'est un AVERTISSEMENT, plus un sursis avant la mort : on ne le déclenche
-   * donc que s'il y a effectivement un multiplicateur à perdre.
+   * Flickering = the final stretch before the multiplier is lost.
+   * It is a WARNING, no longer a reprieve before death, so we only trigger it
+   * when there actually is a multiplier to lose.
    */
   private get flickering(): boolean {
     return this.combo > 0 && this.magic > 0 && this.magic <= MAGIC.flickerGrace;
@@ -178,10 +177,10 @@ export class FlightScene extends Phaser.Scene {
   create(): void {
     this.reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 
-    // Ciel dégradé nuit, redessiné à chaque changement de palier (ambiance).
+    // Night sky gradient, redrawn on every tier change (mood).
     this.sky = this.add.graphics();
 
-    // Lune + son halo de Pleine Lune (invisible tant qu'on n'est pas au plafond).
+    // Moon + its Full Moon halo (invisible until the multiplier hits the cap).
     this.moonGlow = this.add
       .circle(MOON_X, MOON_Y, FULL_MOON.glowRadius, FULL_MOON.glowColor, 1)
       .setAlpha(0)
@@ -190,8 +189,8 @@ export class FlightScene extends Phaser.Scene {
 
     ensureTextures(this);
 
-    // Poussières d'ambiance : décor de fond, sous l'overlay (elles se
-    // raréfient et se refroidissent quand la magie baisse).
+    // Ambient dust: background scenery, under the overlay (it thins out and
+    // cools down as magic fades).
     this.ambient = this.add.particles(0, 0, SPARK_KEY, {
       x: { min: 0, max: WORLD.width },
       y: { min: 0, max: WORLD.height },
@@ -206,7 +205,7 @@ export class FlightScene extends Phaser.Scene {
     });
     this.ambient.setDepth(DEPTH_AMBIENT);
 
-    // Traînée : émetteur unique qui suit la sorcière, réglé par le combo.
+    // Trail: a single emitter following the witch, tuned by the combo.
     this.trailEmitter = this.add.particles(0, 0, SPARK_KEY, {
       frequency: TRAIL.frequencyIdle,
       lifespan: TRAIL.lifespanIdle,
@@ -220,7 +219,7 @@ export class FlightScene extends Phaser.Scene {
     });
     this.trailEmitter.setDepth(4);
 
-    // La sorcière (placeholder : orbe). Le visuel est plus gros que la hitbox.
+    // The witch (placeholder: an orb). The visual is larger than the hitbox.
     this.witch = this.add.circle(WITCH.x, WORLD.height / 2, WITCH.radius, FULL_MOON.witchColorNormal);
     this.witch.setStrokeStyle(2, 0xffffff, 0.6);
     this.witch.setDepth(5);
@@ -228,7 +227,7 @@ export class FlightScene extends Phaser.Scene {
 
     this.spawner = new ObstacleSpawner(this);
 
-    // Voile doré de Pleine Lune : bascule toute la palette d'un coup.
+    // Golden Full Moon veil: flips the whole palette in one go.
     this.moonVeil = this.add
       .rectangle(0, 0, WORLD.width, WORLD.height, FULL_MOON.veilColor, 1)
       .setOrigin(0, 0)
@@ -236,16 +235,16 @@ export class FlightScene extends Phaser.Scene {
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(14);
 
-    // Nuit qui tombe : voile noir percé d'un halo de lumière sur la sorcière.
-    // SOUS les obstacles, leurs halos et la sorcière (invariant de lisibilité) :
-    // il n'assombrit que le fond et le décor.
+    // Falling night: a black veil pierced by a light hole on the witch.
+    // UNDER the obstacles, their halos and the witch (readability invariant):
+    // it only darkens the background and the scenery.
     this.darkness = this.add
       .renderTexture(0, 0, WORLD.width, WORLD.height)
       .setOrigin(0, 0)
       .setDepth(DEPTH_DARKNESS);
     this.lightBrush = this.make.image({ key: LIGHT_KEY, add: false }).setOrigin(0.5);
 
-    // Annonce de palier : nom en grand au centre, au-dessus du voile de nuit.
+    // Tier announcement: name in large type, centred, above the night veil.
     this.tierText = this.add
       .text(WORLD.width / 2, WORLD.height * 0.42, "", {
         fontFamily: "sans-serif",
@@ -257,7 +256,7 @@ export class FlightScene extends Phaser.Scene {
       .setDepth(21)
       .setAlpha(0);
 
-    // Mot d'apprentissage : suit le premier obstacle de la première partie.
+    // Onboarding word: follows the first obstacle of the very first run.
     this.teachText = this.add
       .text(0, 0, "", {
         fontFamily: "sans-serif",
@@ -276,14 +275,14 @@ export class FlightScene extends Phaser.Scene {
 
     if (DEBUG_HITBOX) this.debugGfx = this.add.graphics().setDepth(25);
 
-    // Pause automatique dès que l'onglet passe en arrière-plan : on ne peut
-    // pas mourir pendant une absence. La reprise se fait au tap.
+    // Automatic pause as soon as the tab goes to the background: you cannot
+    // die while away. Resuming is done with a tap.
     this.onVisibilityChange = () => {
       if (document.hidden) this.pauseRun();
     };
     document.addEventListener("visibilitychange", this.onVisibilityChange);
     this.game.events.on(Phaser.Core.Events.BLUR, this.pauseRun, this);
-    // Retrait des écouteurs globaux si la scène est arrêtée (retour menu).
+    // Remove the global listeners if the scene stops (returning to the menu).
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       if (this.onVisibilityChange) {
         document.removeEventListener("visibilitychange", this.onVisibilityChange);
@@ -291,18 +290,18 @@ export class FlightScene extends Phaser.Scene {
       this.game.events.off(Phaser.Core.Events.BLUR, this.pauseRun, this);
     });
 
-    // Input : pointeur maintenu = poussée vers le haut.
+    // Input: pointer held down = upward thrust.
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => this.onPointerDown(pointer));
     this.input.on("pointerup", () => {
       this.holding = false;
-      // Le doigt est relâché : le prochain appui pilotera de nouveau.
+      // The finger is up: the next press steers again.
       this.armed = true;
     });
 
     this.refreshTexts();
     this.resetRun();
 
-    // Rafraîchissement immédiat au changement de langue, sans rechargement.
+    // Immediate refresh when the language changes, with no reload.
     const unsubscribeLang = onLanguageChange(() => this.refreshTexts());
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, unsubscribeLang);
   }
@@ -328,7 +327,7 @@ export class FlightScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setDepth(20);
 
-    // Jauge de magie : barre fine, discrète, juste sous le multiplicateur.
+    // Magic gauge: thin, discreet bar just below the multiplier.
     const barX = (WORLD.width - MAGIC.barWidth) / 2;
     this.add
       .rectangle(barX, MAGIC.barY, MAGIC.barWidth, MAGIC.barHeight, 0xffffff, MAGIC.barTrackAlpha)
@@ -339,7 +338,7 @@ export class FlightScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setDepth(20);
 
-    // Overlay de debug : créé uniquement si DEBUG_STATS (jamais en production).
+    // Debug overlay: only created when DEBUG_STATS is on (never in production).
     if (DEBUG_STATS) {
       this.fpsText = this.add
         .text(8, 8, "", { fontFamily: "monospace", fontSize: "12px", color: "#8877aa" })
@@ -348,10 +347,10 @@ export class FlightScene extends Phaser.Scene {
   }
 
   /**
-   * Décor de l'écran de mort : un ciel opaque qui masque complètement la
-   * partie perdue, plus la lune, les poussières et une sorcière qui se
-   * balade — le même repos visuel que l'accueil. Créé UNE fois (le restart
-   * ne fait que basculer des visibilités, il reste sous 300 ms).
+   * Death-screen scenery: an opaque sky that fully hides the lost run, plus
+   * the moon, the dust and a roaming witch — the same visual rest as the home
+   * screen. Built ONCE (a restart only toggles visibility, so it stays under
+   * 300 ms).
    */
   private buildDeathScene(): void {
     const tier = TIERS[0];
@@ -360,7 +359,7 @@ export class FlightScene extends Phaser.Scene {
     sky.fillGradientStyle(tier.skyTop, tier.skyTop, tier.skyBottom, tier.skyBottom, 1);
     sky.fillRect(0, 0, WORLD.width, WORLD.height);
 
-    // Halo doux : la texture radiale, pas un cercle plein (bord dur affreux).
+    // Soft glow: the radial texture, not a solid circle (ugly hard edge).
     const glow = this.add
       .image(MOON_X, MOON_Y, LIGHT_KEY)
       .setDisplaySize(340, 340)
@@ -385,7 +384,7 @@ export class FlightScene extends Phaser.Scene {
       })
       .setDepth(29);
 
-    // Traînée dorée « de belle partie », comme au menu.
+    // Golden "great run" trail, same as on the menu.
     this.deathTrail = this.add
       .particles(0, 0, SPARK_KEY, {
         frequency: 16,
@@ -413,7 +412,7 @@ export class FlightScene extends Phaser.Scene {
     for (const object of this.deathScene) {
       (object as unknown as { setVisible(v: boolean): void }).setVisible(on);
     }
-    // Les émetteurs ne tournent que quand l'écran est affiché.
+    // The emitters only run while the screen is showing.
     if (on) {
       this.deathDust.start();
       this.deathTrail.start();
@@ -425,7 +424,7 @@ export class FlightScene extends Phaser.Scene {
     }
   }
 
-  /** La sorcière de l'écran de mort se balade dans la bande libre du haut. */
+  /** The death-screen witch roams inside the free band at the top. */
   private updateDeathScene(time: number): void {
     const t = time / 1000;
     this.deathWitch.x = WORLD.width * 0.5 + Math.sin(t * 0.75) * WORLD.width * 0.34;
@@ -435,7 +434,7 @@ export class FlightScene extends Phaser.Scene {
   private buildDeathPanel(): void {
     const cx = WORLD.width / 2;
 
-    // Voile léger : le décor animé reste visible dessous, le texte reste net.
+    // Light veil: the animated scenery stays visible beneath, text stays crisp.
     const veil = this.add.rectangle(0, 0, WORLD.width, WORLD.height, 0x05030c, 0.34).setOrigin(0, 0);
 
     this.recordText = this.add
@@ -456,7 +455,7 @@ export class FlightScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // Cause de la mort : le joueur doit comprendre en un coup d'œil.
+    // Cause of death: the player must understand at a glance.
     this.deathCauseText = this.add
       .text(cx, 392, "", {
         fontFamily: "sans-serif",
@@ -465,7 +464,7 @@ export class FlightScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // Bilan de la run : palier atteint + meilleur combo.
+    // Run summary: tier reached + best combo.
     this.deathStatsText = this.add
       .text(cx, 452, "", {
         fontFamily: "sans-serif",
@@ -476,9 +475,9 @@ export class FlightScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // Deux boutons secondaires côte à côte, au-dessus de la zone du pouce.
-    // Largeur commune calée sur la plus longue traduction des DEUX libellés
-    // dans les 4 langues (« Compartir »/« Condividi » dépassent « Share »).
+    // Two secondary buttons side by side, above the thumb zone.
+    // Shared width sized against the longest translation of BOTH labels across
+    // the 4 languages ("Compartir"/"Condividi" are wider than "Share").
     const secondaryStyle = { fontFamily: "sans-serif", fontStyle: "bold", fontSize: "22px" };
     const btnH = 62;
     const btnY = 597;
@@ -506,8 +505,8 @@ export class FlightScene extends Phaser.Scene {
       .text(homeCx, btnY, "", { ...secondaryStyle, color: "#d9a7ff" })
       .setOrigin(0.5);
 
-    // Rejouer : occupe tout le bas de l'écran, atteignable au pouce.
-    // Pas de zone de test dédiée : tout tap hors « Partager » relance.
+    // Replay: fills the whole bottom of the screen, within thumb reach.
+    // No dedicated hit zone: any tap outside "Share"/"Home" restarts.
     const replayTop = 706;
     const replayBg = this.add
       .rectangle(0, replayTop, WORLD.width, WORLD.height - replayTop, 0x9b6bff, 0.16)
@@ -522,7 +521,7 @@ export class FlightScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // Un seul conteneur à basculer : la relance ne recharge jamais la scène.
+    // A single container to toggle: restarting never reloads the scene.
     this.deathPanel = this.add
       .container(0, 0, [
         veil,
@@ -543,13 +542,13 @@ export class FlightScene extends Phaser.Scene {
     this.deathBtnW = btnW;
   }
 
-  /** Gèle la partie sans tuer : appelée quand l'onglet part en arrière-plan. */
+  /** Freezes the run without killing: called when the tab goes background. */
   private pauseRun(): void {
     if (this.dead || this.paused) return;
     this.paused = true;
     this.holding = false;
-    // Le doigt réel n'est plus connu au retour : on désarme jusqu'au prochain
-    // relâchement, sinon un doigt « fantôme » ferait monter la sorcière.
+    // The real finger state is unknown on return, so we disarm until the next
+    // release — otherwise a "ghost" finger would make the witch climb.
     this.armed = false;
     this.pausePanel.setVisible(true);
   }
@@ -584,9 +583,9 @@ export class FlightScene extends Phaser.Scene {
   }
 
   /**
-   * Tous les libellés statiques de la scène, (re)posés puis ajustés à leur
-   * zone. Appelé au démarrage et à chaque changement de langue — les textes
-   * dynamiques (score, bilan) sont rafraîchis par refreshDeathTexts().
+   * Every static label in the scene, (re)applied and fitted to its area.
+   * Called on start and on every language change — dynamic texts (score, run
+   * summary) are refreshed by refreshDeathTexts().
    */
   private refreshTexts(): void {
     this.shareLabel.setText(t("death.share"));
@@ -604,7 +603,7 @@ export class FlightScene extends Phaser.Scene {
     this.teachText.setText(t("teach.word"));
     fitText(this.teachText, WORLD.width * 0.6, TEACH.fontSizePx);
 
-    // Le nom du palier en cours d'annonce change aussi de langue.
+    // A tier name currently being announced changes language too.
     if (this.tierText.alpha > 0) {
       this.tierText.setText(t(TIERS[this.tierIndex].nameKey));
       fitText(this.tierText, WORLD.width - 48, 42);
@@ -613,7 +612,7 @@ export class FlightScene extends Phaser.Scene {
     if (this.dead) this.refreshDeathTexts();
   }
 
-  /** Libellés dépendant de la run affichée sur l'écran de mort. */
+  /** Labels that depend on the run shown on the death screen. */
   private refreshDeathTexts(): void {
     this.deathScoreText.setText(String(this.score));
     fitText(this.deathScoreText, WORLD.width - 48, 96);
@@ -632,38 +631,38 @@ export class FlightScene extends Phaser.Scene {
   }
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
-    // Le contexte audio ne peut s'ouvrir que sur un geste utilisateur.
+    // The audio context can only open on a user gesture.
     this.sfx.unlock();
 
     if (this.paused) {
-      // Ce tap ne fait que reprendre : il ne pilote pas.
+      // This tap only resumes: it does not steer.
       this.resumeRun();
       return;
     }
 
     if (this.dead) {
       if (this.time.now - this.deathAt < RESTART.minDeathMs) return;
-      // Seuls « Partager » et « Accueil » détournent le tap ; partout ailleurs
-      // on relance, pour que l'envie de rejouer ne bute jamais sur une zone morte.
+      // Only "Share" and "Home" divert the tap; everywhere else restarts, so
+      // the urge to replay never runs into a dead zone.
       if (this.shareZone.contains(pointer.x, pointer.y)) {
         void this.shareRun();
         return;
       }
       if (this.homeZone.contains(pointer.x, pointer.y)) {
-        // Retour à l'accueil : le SHUTDOWN de la scène retire les écouteurs
-        // globaux de pause, et le menu relira les stats à jour.
+        // Back to the home screen: the scene SHUTDOWN removes the global pause
+        // listeners, and the menu will re-read the up-to-date stats.
         this.scene.start("menu");
         return;
       }
       this.resetRun();
-      // Ce tap relance la partie : il ne doit pas faire monter la sorcière.
+      // This tap restarts the run: it must not make the witch climb.
       this.armed = false;
       return;
     }
     if (this.armed) this.holding = true;
   }
 
-  /** Restart en place : on ne recrée ni la scène ni le décor. */
+  /** In-place restart: neither the scene nor the scenery is rebuilt. */
   private resetRun(): void {
     this.spawner.reset();
     this.trailEmitter.killAll();
@@ -698,9 +697,9 @@ export class FlightScene extends Phaser.Scene {
     this.pausePanel.setVisible(false);
     this.debugGfx?.clear();
 
-    // Palier de départ : normal, ou forcé par DEBUG_START_TIER (test sans
-    // rejouer 80 s). Les paramètres sont posés d'un coup, sans interpolation
-    // depuis la partie précédente.
+    // Starting tier: normal, or forced by DEBUG_START_TIER (testing without
+    // replaying 80 s). Parameters are applied at once, with no interpolation
+    // carried over from the previous run.
     const startTier = DEBUG_START_TIER >= 0 ? Math.min(DEBUG_START_TIER, TIERS.length - 1) : 0;
     this.runTime = TIERS[startTier].startTime;
     this.tierIndex = startTier;
@@ -711,8 +710,8 @@ export class FlightScene extends Phaser.Scene {
     this.applyAmbiance(true);
     this.announceTier(TIERS[startTier].nameKey);
 
-    // Apprentissage : uniquement tant que le premier frôlement n'a jamais
-    // été réussi (persiste entre les runs de la première session).
+    // Onboarding: only while the first graze has never succeeded (this
+    // persists across runs within the first session).
     this.teaching = !isTutorialDone();
     this.teachText.setVisible(false);
 
@@ -722,7 +721,7 @@ export class FlightScene extends Phaser.Scene {
     this.refreshMagic();
   }
 
-  /** Partage de la run affichée sur l'écran de mort. */
+  /** Shares the run currently shown on the death screen. */
   private async shareRun(): Promise<void> {
     await shareScoreImage({
       score: this.score,
@@ -732,7 +731,7 @@ export class FlightScene extends Phaser.Scene {
     });
   }
 
-  /** L'obstacle porteur de l'apprentissage : le plus ancien encore à frôler. */
+  /** The obstacle carrying the onboarding: the oldest one still to be grazed. */
   private get teachTarget(): Obstacle | null {
     if (!this.teaching) return null;
     for (const obstacle of this.spawner.all) {
@@ -741,7 +740,7 @@ export class FlightScene extends Phaser.Scene {
     return null;
   }
 
-  /** Le mot « FRÔLE » suit l'obstacle cible, au centre de son passage. */
+  /** The graze word follows the target obstacle, centred on its gap. */
   private updateTeach(): void {
     const target = this.teachTarget;
     if (!target) {
@@ -750,8 +749,8 @@ export class FlightScene extends Phaser.Scene {
     }
     const bandCenter =
       (Math.max(target.gapTop, 0) + Math.min(target.gapBottom, WORLD.height)) / 2;
-    // Clampé sur la largeur RÉELLE du mot traduit (« SFIORA » est bien plus
-    // large que « ROZA ») : il ne sort jamais de l'écran, dans aucune langue.
+    // Clamped against the REAL width of the translated word ("SFIORA" is much
+    // wider than "ROZA"): it never leaves the screen, in any language.
     const x = Math.max(this.teachText.width / 2 + 10, target.x + TEACH.offsetX);
     this.teachText.setPosition(x, bandCenter).setVisible(true);
   }
@@ -767,7 +766,7 @@ export class FlightScene extends Phaser.Scene {
     };
   }
 
-  /** Dernier palier dont le startTime est atteint. */
+  /** Last tier whose startTime has been reached. */
   private tierIndexFor(time: number): number {
     let index = 0;
     for (let i = 0; i < TIERS.length; i++) {
@@ -777,10 +776,10 @@ export class FlightScene extends Phaser.Scene {
   }
 
   /**
-   * Temps de jeu -> palier courant -> paramètres effectifs.
-   * Au changement de palier : annonce du nom, puis interpolation douce sur
-   * TIER_FX.transitionS pour éviter l'à-coup. Le dernier palier est un
-   * plateau : une fois sa transition finie, plus rien ne bouge.
+   * Play time -> current tier -> effective parameters.
+   * On a tier change: announce the name, then interpolate smoothly over
+   * TIER_FX.transitionS to avoid a jolt. The last tier is a plateau: once its
+   * transition ends, nothing moves any more.
    */
   private updateDifficulty(dt: number): void {
     this.runTime += dt;
@@ -805,16 +804,16 @@ export class FlightScene extends Phaser.Scene {
         skyTop: lerpColor(this.diffFrom.skyTop, to.skyTop, k),
         skyBottom: lerpColor(this.diffFrom.skyBottom, to.skyBottom, k)
       };
-      // Le redessin du ciel passe par applyAmbiance (clé changée par le lerp).
+      // The sky redraw goes through applyAmbiance (the lerp changes its key).
     }
   }
 
   /**
-   * Ambiance = décor uniquement, jamais la couche de jeu.
-   * Quand la magie baisse, le monde se DÉSATURE et se refroidit : ciel gris
-   * bleuté, lune pâlie, poussières raréfiées et froides. En parallèle, le
-   * liseré des obstacles se renforce — leur lisibilité est un invariant.
-   * Ne redessine que si l'état quantifié a changé (transition ou jauge).
+   * Mood = scenery only, never the gameplay layer.
+   * As magic fades, the world DESATURATES and cools: blue-grey sky, paler
+   * moon, sparser and colder dust. In parallel the obstacle outline gets
+   * stronger — their readability is an invariant.
+   * Only redraws when the quantised state changed (transition or gauge).
    */
   private applyAmbiance(force = false): void {
     const ratio = Phaser.Math.Clamp(this.magic / MAGIC.max, 0, 1);
@@ -823,17 +822,17 @@ export class FlightScene extends Phaser.Scene {
     if (!force && key === this.lastAmbianceKey) return;
     this.lastAmbianceKey = key;
 
-    // Ciel refroidi et désaturé.
+    // Cooled and desaturated sky.
     this.sky.clear();
     const top = coolDesat(this.diffCurrent.skyTop, cold);
     const bottom = coolDesat(this.diffCurrent.skyBottom, cold);
     this.sky.fillGradientStyle(top, top, bottom, bottom, 1);
     this.sky.fillRect(0, 0, WORLD.width, WORLD.height);
 
-    // Lune pâlie.
+    // Paler moon.
     this.moon.setFillStyle(lerpColor(MOON_COLOR, MAGIC.coldMoonColor, cold), 0.9);
 
-    // Poussières d'ambiance raréfiées et refroidies.
+    // Sparser, cooler ambient dust.
     this.ambient.frequency = Phaser.Math.Linear(AMBIENT.frequencyCold, AMBIENT.frequencyLit, ratio);
     this.ambient.setParticleAlpha({
       start: Phaser.Math.Linear(AMBIENT.alphaCold, AMBIENT.alphaLit, ratio),
@@ -841,8 +840,8 @@ export class FlightScene extends Phaser.Scene {
     });
     this.ambient.setParticleTint(lerpColor(AMBIENT.colorCold, AMBIENT.colorLit, ratio));
 
-    // Contraste garanti : liseré renforcé quand la lumière baisse
-    // (appliqué à chaque obstacle dans updateNearMiss).
+    // Guaranteed contrast: outline strengthened as the light fades
+    // (applied per obstacle in updateNearMiss).
     this.obstacleStrokeAlpha = Phaser.Math.Linear(
       OBSTACLES.colors.strokeAlphaDark,
       OBSTACLES.colors.strokeAlphaLit,
@@ -850,7 +849,7 @@ export class FlightScene extends Phaser.Scene {
     );
   }
 
-  /** Nom du palier en grand : fondu entrant, maintien, fondu sortant. */
+  /** Tier name in large type: fade in, hold, fade out. */
   private announceTier(nameKey: (typeof TIERS)[number]["nameKey"]): void {
     this.tweens.killTweensOf(this.tierText);
     this.tierText.setText(t(nameKey)).setAlpha(0);
@@ -873,15 +872,15 @@ export class FlightScene extends Phaser.Scene {
     this.tweens.timeScale = 1;
     this.sfx.death();
 
-    // Persistance : la run est enregistrée une seule fois, ici.
+    // Persistence: the run is recorded exactly once, here.
     const { newBestScore } = recordRun(this.score, this.bestComboThisRun, this.bestTierThisRun);
     this.lastRunWasRecord = newBestScore;
 
     this.refreshDeathTexts();
     this.recordText.setVisible(newBestScore);
 
-    // Décor de repos : on masque la partie perdue et on coupe les émetteurs
-    // du jeu, qui continueraient sinon à tourner derrière un ciel opaque.
+    // Resting scenery: hide the lost run and stop the gameplay emitters,
+    // which would otherwise keep running behind an opaque sky.
     this.trailEmitter.stop();
     this.ambient.stop();
     this.setDeathSceneVisible(true);
@@ -889,9 +888,9 @@ export class FlightScene extends Phaser.Scene {
   }
 
   /**
-   * ENTRÉE dans la zone de frôlement : on recharge tout de suite.
-   * Recharger dès l'entrée (et non à la sortie) évite de perdre le
-   * multiplicateur alors qu'on est déjà en train de frôler correctement.
+   * ENTERING the graze zone: refill immediately.
+   * Refilling on entry (rather than on exit) avoids losing the multiplier
+   * while already grazing correctly.
    */
   private onGrazeEnter(): void {
     this.magic = MAGIC.max;
@@ -899,15 +898,15 @@ export class FlightScene extends Phaser.Scene {
     this.witch.setAlpha(1);
   }
 
-  /** SORTIE de la zone : c'est là, et seulement là, qu'on marque des points. */
+  /** LEAVING the zone: this, and only this, is where points are scored. */
   private onGrazeExit(obstacle: Obstacle): void {
     this.combo += 1;
-    // Le frôlement relance le combo : la prochaine traversée en obscurité
-    // repartira du début de la séquence de points dégressifs.
+    // The graze revives the combo: the next run through the dark will restart
+    // from the beginning of the decaying points sequence.
     this.darkStreak = 0;
 
-    // Premier frôlement réussi de tous les temps : l'apprentissage disparaît
-    // définitivement (aucun texte, aucune popup, juste plus besoin de lui).
+    // First successful graze ever: the onboarding disappears for good (no
+    // text, no popup — it is simply no longer needed).
     if (this.teaching) {
       this.teaching = false;
       this.teachText.setVisible(false);
@@ -926,7 +925,7 @@ export class FlightScene extends Phaser.Scene {
 
     this.sfx.graze(this.combo);
 
-    // Secousse proportionnelle au combo, mais toujours minuscule.
+    // Shake proportional to the combo, but always tiny.
     if (!this.reducedMotion) {
       const px = Phaser.Math.Linear(SHAKE.minPx, SHAKE.maxPx, this.comboRatio);
       this.cameras.main.shake(
@@ -935,14 +934,14 @@ export class FlightScene extends Phaser.Scene {
       );
     }
 
-    // Frôlement extrême : ralenti. La mort est à 10 px, le seuil à 18 :
-    // la fenêtre est étroite, donc le ralenti reste un moment rare.
+    // Extreme graze: slow motion. Death is at 10 px and the threshold at 18,
+    // so the window is narrow and slow motion stays a rare moment.
     if (!this.reducedMotion && obstacle.minDistance < SLOWMO.thresholdPx) {
       this.slowMoLeft = SLOWMO.durationMs / 1000;
     }
   }
 
-  /** Texte qui monte et s'efface, puis se détruit. */
+  /** Text that rises and fades out, then destroys itself. */
   private spawnFloater(
     x: number,
     y: number,
@@ -969,10 +968,10 @@ export class FlightScene extends Phaser.Scene {
     });
   }
 
-  /**
-   * Un passage dans l'anneau = un frôlement, validé seulement quand
-   * l'obstacle ressort de l'anneau ou passe derrière la sorcière.
-   * Retourne true si la sorcière est morte.
+   /**
+   * One pass through the ring = one graze, only confirmed when the obstacle
+   * leaves the ring or moves behind the witch.
+   * Returns true if the witch died.
    */
   private updateNearMiss(): boolean {
     const wx = this.witch.x;
@@ -984,7 +983,7 @@ export class FlightScene extends Phaser.Scene {
       if (d <= NEAR_MISS.deathRadius) return true;
 
       const inZone = d <= NEAR_MISS.grazeRadius;
-      // Halo exagéré sur l'obstacle d'apprentissage de la première partie.
+      // Exaggerated halo on the first run's onboarding obstacle.
       const teach = this.teaching && obstacle === this.teachTarget;
       obstacle.halo.setAlpha(
         inZone
@@ -995,11 +994,11 @@ export class FlightScene extends Phaser.Scene {
             ? TEACH.haloAlpha
             : FEEDBACK.haloAlpha
       );
-      // Invariant de lisibilité : liseré renforcé quand la lumière baisse.
+      // Readability invariant: outline strengthened as the light fades.
       obstacle.setContrast(this.obstacleStrokeAlpha);
 
       if (inZone) {
-        // Front montant : on vient d'entrer dans l'anneau -> recharge immédiate.
+        // Rising edge: we just entered the ring -> immediate refill.
         if (!obstacle.inGrazeZone) {
           obstacle.inGrazeZone = true;
           if (!obstacle.grazeEntered) {
@@ -1007,14 +1006,14 @@ export class FlightScene extends Phaser.Scene {
             this.onGrazeEnter();
           }
         }
-        // On retient le point le plus proche : c'est là qu'on affichera le texte.
+        // Remember the closest point: that is where the text will pop up.
         if (d < obstacle.minDistance) {
           obstacle.minDistance = d;
           obstacle.grazeX = wx;
           obstacle.grazeY = wy;
         }
       } else if (obstacle.inGrazeZone) {
-        // Front descendant : sorti de l'anneau sans toucher, le score est acquis.
+        // Falling edge: left the ring without touching, the score is earned.
         obstacle.inGrazeZone = false;
         if (!obstacle.grazed) {
           obstacle.grazed = true;
@@ -1024,14 +1023,14 @@ export class FlightScene extends Phaser.Scene {
 
       if (!obstacle.passed && obstacle.isBehind(wx)) {
         obstacle.passed = true;
-        // Filet de sécurité : dépassé alors qu'on est encore dans l'anneau.
+        // Safety net: passed while still inside the ring.
         if (obstacle.inGrazeZone && !obstacle.grazed) {
           obstacle.grazed = true;
           this.onGrazeExit(obstacle);
         } else if (!obstacle.grazed && this.combo === 0) {
-          // DARK_POINTS dégressifs : le Nième obstacle de la traversée en
-          // obscurité rapporte la Nième valeur de la séquence, puis 0.
-          // Combo actif -> rien : seuls les frôlements marquent.
+          // Decaying DARK_POINTS: the Nth obstacle of the run through the dark
+          // awards the Nth value of the sequence, then 0.
+          // Combo active -> nothing: only grazes score.
           const seq = SCORING.darkPointsSequence;
           const points = seq[Math.min(this.darkStreak, seq.length - 1)];
           this.darkStreak += 1;
@@ -1059,21 +1058,21 @@ export class FlightScene extends Phaser.Scene {
       this.multiplierText.setText(`×${Number.isInteger(m) ? m : m.toFixed(1)}`);
       this.multiplierText.setAlpha(this.combo === 0 ? 0.35 : 1);
       this.lastDrawnCombo = this.combo;
-      // Le combo a bougé : c'est le seul moment où la traînée doit être
-      // reconfigurée (inutile et coûteux de le faire à chaque frame).
+      // The combo changed: this is the only moment the trail needs
+      // reconfiguring (doing it every frame would be pointless and costly).
       this.refreshComboVisuals();
     }
   }
 
-  /** Traînée + Pleine Lune : tout ce qui traduit le multiplicateur en image. */
+  /** Trail + Full Moon: everything that turns the multiplier into an image. */
   private refreshComboVisuals(): void {
     const t = this.comboRatio;
     const emitter = this.trailEmitter;
 
     emitter.frequency = Phaser.Math.Linear(TRAIL.frequencyIdle, TRAIL.frequencyMax, t);
     emitter.setParticleLifespan(Phaser.Math.Linear(TRAIL.lifespanIdle, TRAIL.lifespanMax, t));
-    // L'alpha garde sa rampe vers 0 (c'est lui qui éteint la particule) ;
-    // setParticleScale n'accepte que des nombres, donc la taille reste fixe.
+    // Alpha keeps its ramp to 0 (that is what extinguishes the particle);
+    // setParticleScale only accepts numbers, so the size stays constant.
     emitter.setParticleAlpha({ start: Phaser.Math.Linear(TRAIL.alphaIdle, TRAIL.alphaMax, t), end: 0 });
     const scale = Phaser.Math.Linear(TRAIL.scaleIdle, TRAIL.scaleMax, t);
     emitter.setParticleScale(scale, scale);
@@ -1082,7 +1081,7 @@ export class FlightScene extends Phaser.Scene {
     this.setFullMoon(this.multiplier >= NEAR_MISS.multiplierMax);
   }
 
-  /** Bascule de la Pleine Lune. `instant` sert au restart. */
+  /** Full Moon toggle. `instant` is used by the restart. */
   private setFullMoon(on: boolean, instant = false): void {
     if (this.fullMoon === on && !instant) return;
     this.fullMoon = on;
@@ -1107,12 +1106,12 @@ export class FlightScene extends Phaser.Scene {
     this.tweens.add({ targets: this.moonVeil, alpha: on ? FULL_MOON.veilAlpha : 0, duration });
   }
 
-  /** Onde du vacillement, entre 0 et 1. */
+  /** Flicker wave, between 0 and 1. */
   private get flickerWave(): number {
     return 0.5 + 0.5 * Math.sin(this.flickerPhase * Math.PI * 2 * MAGIC.flickerPulseHz);
   }
 
-  /** La sorcière clignote : signal « ton multiplicateur va sauter ». */
+  /** The witch flickers: the "your multiplier is about to break" signal. */
   private updateFlicker(): void {
     if (!this.flickering) {
       this.witch.setAlpha(1);
@@ -1121,14 +1120,14 @@ export class FlightScene extends Phaser.Scene {
     this.witch.setAlpha(this.flickerWave > 0.5 ? 1 : MAGIC.flickerWitchAlpha);
   }
 
-  /** Barre de jauge + voile de nuit, tous deux pilotés par la magie restante. */
+  /** Gauge bar + night veil, both driven by the magic left. */
   private refreshMagic(): void {
     const ratio = Phaser.Math.Clamp(this.magic / MAGIC.max, 0, 1);
 
     this.magicFill.setDisplaySize(MAGIC.barWidth * ratio, MAGIC.barHeight);
 
     let alpha = Phaser.Math.Linear(MAGIC.darkAlphaEmpty, MAGIC.darkAlphaFull, ratio);
-    // Pendant le sursis, le voile pulse : la nuit « respire » avant de tomber.
+    // While flickering the veil pulses: the night "breathes" before falling.
     if (this.flickering) {
       alpha = Phaser.Math.Clamp(alpha - MAGIC.flickerDarkSwing * this.flickerWave, 0, 1);
     }
@@ -1136,7 +1135,7 @@ export class FlightScene extends Phaser.Scene {
     if (alpha <= 0.001) return;
 
     this.darkness.fill(0x000000, alpha);
-    // On perce le voile autour de la sorcière : le halo rétrécit avec la jauge.
+    // Pierce the veil around the witch: the hole shrinks with the gauge.
     const radius = Phaser.Math.Linear(MAGIC.lightRadiusEmpty, MAGIC.lightRadiusFull, ratio);
     this.lightBrush.setPosition(this.witch.x, this.witch.y).setScale((radius * 2) / LIGHT_SIZE);
     this.darkness.erase(this.lightBrush);
@@ -1147,7 +1146,7 @@ export class FlightScene extends Phaser.Scene {
     if (!g) return;
     g.clear();
 
-    // Formes de collision réelles des obstacles.
+    // The obstacles' actual collision shapes.
     g.lineStyle(1, 0x00d0ff, 0.8);
     for (const obstacle of this.spawner.all) {
       for (const shape of obstacle.shapes) {
@@ -1164,7 +1163,7 @@ export class FlightScene extends Phaser.Scene {
       }
     }
 
-    // Anneau de frôlement puis hitbox mortelle, autour de la sorcière.
+    // Graze ring, then lethal hitbox, around the witch.
     g.lineStyle(1, 0x4dff9e, 0.6);
     g.strokeCircle(this.witch.x, this.witch.y, NEAR_MISS.grazeRadius);
     g.lineStyle(2, 0xff4d4d, 0.9);
@@ -1172,15 +1171,15 @@ export class FlightScene extends Phaser.Scene {
   }
 
   /**
-   * Facteur de ralenti du frame, et décompte du ralenti en temps RÉEL
-   * (sinon le ralenti se ralentirait lui-même et ne finirait jamais).
+   * The frame's slow-motion factor, counted down in REAL time (otherwise slow
+   * motion would slow itself down and never end).
    */
   private consumeTimeScale(realDt: number): number {
     if (this.slowMoLeft <= 0) return 1;
 
     this.slowMoLeft = Math.max(0, this.slowMoLeft - realDt);
     const k = this.slowMoLeft / (SLOWMO.durationMs / 1000);
-    // k=1 au déclenchement -> scale plancher, puis remontée progressive vers 1.
+    // k=1 on trigger -> floor scale, then a gradual climb back to 1.
     return Phaser.Math.Linear(1, SLOWMO.scale, k);
   }
 
@@ -1190,21 +1189,21 @@ export class FlightScene extends Phaser.Scene {
         `${Math.round(this.diffCurrent.speed)} px/s | ${t(TIERS[this.tierIndex].nameKey)}`
     );
 
-    // Mort : le monde est gelé, seul le décor de l'écran de rejeu s'anime.
+    // Dead: the world is frozen, only the replay screen's scenery animates.
     if (this.dead) {
       this.updateDeathScene(time);
       return;
     }
-    // En pause : tout est gelé, aucune mort possible.
+    // Paused: everything is frozen, no death is possible.
     if (this.paused) return;
 
     const realDt = deltaMs / 1000;
     const timeScale = this.consumeTimeScale(realDt);
-    // Les tweens suivent le ralenti pour que les textes flottants restent cohérents.
+    // Tweens follow the slow motion so floating texts stay consistent.
     this.tweens.timeScale = timeScale;
     const dt = realDt * timeScale;
 
-    // --- Vol : gravité douce + poussée au maintien.
+    // --- Flight: gentle gravity + thrust while held.
     this.velocityY += (this.holding ? WITCH.thrust : WITCH.gravity) * dt;
     this.velocityY = Phaser.Math.Clamp(this.velocityY, -WITCH.maxSpeed, WITCH.maxSpeed);
     this.witch.y = Phaser.Math.Clamp(
@@ -1213,24 +1212,24 @@ export class FlightScene extends Phaser.Scene {
       WORLD.height - WITCH.marginBottom
     );
 
-    // Légère inclinaison visuelle selon la vitesse (feel).
+    // Slight visual squash based on speed (feel).
     this.witch.setScale(1, 1 - Math.abs(this.velocityY) / 2400);
 
-    // --- Difficulté : temps de jeu, palier courant, interpolation douce.
+    // --- Difficulty: play time, current tier, smooth interpolation.
     this.updateDifficulty(dt);
 
-    // --- Obstacles : génération + défilement au rythme du palier.
+    // --- Obstacles: generation + scrolling at the tier's pace.
     this.spawner.update(dt, this.diffCurrent);
 
-    // --- Near-miss, score, mort. Seule une collision peut tuer.
+    // --- Near-miss, score, death. Only a collision can kill.
     if (this.updateNearMiss()) {
       this.die();
       return;
     }
 
-    // --- Magie : elle ne descend que si aucun frôlement n'a rechargé ce frame.
+    // --- Magic: it only drains if no graze refilled it this frame.
     this.magic = Math.max(0, this.magic - MAGIC.drainPerSecond * dt);
-    // Jauge vide : on perd le multiplicateur, jamais la partie.
+    // Empty gauge: you lose the multiplier, never the run.
     if (this.magic <= 0) this.combo = 0;
 
     this.flickerPhase = this.flickering ? this.flickerPhase + dt : 0;
@@ -1245,8 +1244,8 @@ export class FlightScene extends Phaser.Scene {
 }
 
 /**
- * Désature et refroidit une couleur : k=0 -> intacte, k=1 -> gris bleuté de
- * même luminance. C'est le « froid » de la perte de combo, à la place du noir.
+ * Desaturates and cools a colour: k=0 -> untouched, k=1 -> blue-grey of the
+ * same luminance. This is the "cold" of a lost combo, instead of blackness.
  */
 function coolDesat(color: number, k: number): number {
   const c = Phaser.Display.Color.ValueToColor(color);
@@ -1257,7 +1256,7 @@ function coolDesat(color: number, k: number): number {
   return Phaser.Display.Color.GetColor(Math.round(r), Math.round(g), Math.round(b));
 }
 
-/** Interpolation de deux couleurs entières, pour la teinte des particules. */
+/** Interpolates two integer colours, used for particle tints. */
 function lerpColor(from: number, to: number, t: number): number {
   const c = Phaser.Display.Color.Interpolate.ColorWithColor(
     Phaser.Display.Color.ValueToColor(from),

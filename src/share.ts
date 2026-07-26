@@ -2,9 +2,9 @@ import { BRAND } from "./config";
 import { t } from "./i18n";
 
 /**
- * Image de score partageable, dessinée sur un canvas HORS ÉCRAN en 1080×1920.
- * Zéro dépendance externe, zéro asset : tout est tracé à la main en Canvas 2D,
- * dans la même palette que le jeu. Entièrement localisée (i18n).
+ * Shareable score image, drawn on an OFF-SCREEN 1080x1920 canvas.
+ * Zero external dependencies, zero assets: everything is hand-drawn in
+ * Canvas 2D, in the same palette as the game. Fully localised (i18n).
  */
 const W = 1080;
 const H = 1920;
@@ -17,9 +17,9 @@ export type ShareData = {
 };
 
 /**
- * Réduit la police jusqu'à ce que le texte tienne dans `maxWidth`.
- * Même contrainte de débordement que dans les scènes : les libellés
- * espagnols et italiens sont jusqu'à 30 % plus longs que l'anglais.
+ * Shrinks the font size until the text fits within `maxWidth`.
+ * Same overflow constraint as in the scenes: Spanish and Italian labels run
+ * up to 30% longer than English.
  */
 function fitFont(
   ctx: CanvasRenderingContext2D,
@@ -37,7 +37,7 @@ function fitFont(
   }
 }
 
-/** Trace l'image et retourne le canvas (réutilisable pour blob ou dataURL). */
+/** Draws the card and returns the canvas (reusable for a blob or a data URL). */
 function drawCard(data: ShareData): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -45,14 +45,14 @@ function drawCard(data: ShareData): HTMLCanvasElement {
   const ctx = canvas.getContext("2d");
   if (!ctx) return canvas;
 
-  // Ciel dégradé, même esprit que La Lisière.
+  // Gradient sky, same spirit as The Edge.
   const sky = ctx.createLinearGradient(0, 0, 0, H);
   sky.addColorStop(0, "#0b0716");
   sky.addColorStop(1, "#241a4a");
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, W, H);
 
-  // Lune, en haut à droite.
+  // Moon, top right.
   const moonX = W - 210;
   const moonY = 300;
   const glow = ctx.createRadialGradient(moonX, moonY, 0, moonX, moonY, 300);
@@ -65,8 +65,8 @@ function drawCard(data: ShareData): HTMLCanvasElement {
   ctx.arc(moonX, moonY, 96, 0, Math.PI * 2);
   ctx.fill();
 
-  // Silhouette de la sorcière + traînée dorée, dans le tiers bas : sous le
-  // bloc de texte, pour ne jamais chevaucher le palier ni le combo.
+  // Witch silhouette and golden trail, in the lower third: below the text
+  // block, so it never overlaps the tier name or the combo.
   const witchX = W * 0.68;
   const witchY = H * 0.74;
   ctx.save();
@@ -85,7 +85,7 @@ function drawCard(data: ShareData): HTMLCanvasElement {
     ctx.fill();
   }
   ctx.restore();
-  // L'orbe elle-même.
+  // The orb itself.
   ctx.fillStyle = "#ffe0a0";
   ctx.beginPath();
   ctx.arc(witchX, witchY, 38, 0, Math.PI * 2);
@@ -97,19 +97,19 @@ function drawCard(data: ShareData): HTMLCanvasElement {
   ctx.textAlign = "center";
   const maxTextWidth = W - 120;
 
-  // Mention de record, au-dessus du score.
+  // Record mention, above the score.
   if (data.isRecord) {
     ctx.fillStyle = "#ffd27a";
     fitFont(ctx, t("share.newRecord"), 62, maxTextWidth, "bold");
     ctx.fillText(t("share.newRecord"), W / 2, 500);
   }
 
-  // Le score, énorme : c'est le sujet de l'image.
+  // The score, huge: it is the subject of the image.
   ctx.fillStyle = "#f5efd8";
   fitFont(ctx, String(data.score), 400, maxTextWidth, "bold");
   ctx.fillText(String(data.score), W / 2, 900);
 
-  // Palier atteint et meilleur combo.
+  // Tier reached and best combo.
   ctx.fillStyle = "#d9a7ff";
   fitFont(ctx, data.tierName, 56, maxTextWidth);
   ctx.fillText(data.tierName, W / 2, 1030);
@@ -118,8 +118,8 @@ function drawCard(data: ShareData): HTMLCanvasElement {
   fitFont(ctx, combo, 44, maxTextWidth);
   ctx.fillText(combo, W / 2, 1110);
 
-  // Marque, discrète, en bas. Non traduite (même traitement que le logo de
-  // l'accueil : interlettrage large, jamais passée par i18n).
+  // Brand, discreet, at the bottom. Never translated (same treatment as the
+  // home screen logo: wide letter-spacing, never routed through i18n).
   ctx.fillStyle = "rgba(217,167,255,0.55)";
   fitFont(ctx, BRAND.name, 42, maxTextWidth);
   ctx.letterSpacing = `${Math.round(BRAND.letterSpacing * 0.6)}px`;
@@ -137,8 +137,8 @@ function toBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
 }
 
 /**
- * Partage l'image : Web Share API avec fichier si disponible, sinon
- * téléchargement du PNG. Ne lève jamais — un partage annulé est normal.
+ * Shares the image: Web Share API with a file when available, otherwise a PNG
+ * download. Never throws — a cancelled share is normal.
  */
 export async function shareScoreImage(data: ShareData): Promise<"shared" | "downloaded" | "failed"> {
   try {
@@ -161,17 +161,17 @@ export async function shareScoreImage(data: ShareData): Promise<"shared" | "down
       return "shared";
     }
 
-    // Repli : téléchargement du PNG.
+    // Fallback: download the PNG.
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = "moonwick-score.png";
     a.click();
-    // Laisser au navigateur le temps de démarrer le téléchargement.
+    // Give the browser time to start the download.
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
     return "downloaded";
   } catch {
-    // Partage annulé par l'utilisateur, ou API indisponible : sans conséquence.
+    // Share cancelled by the user, or API unavailable: harmless.
     return "failed";
   }
 }

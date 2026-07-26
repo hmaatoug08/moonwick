@@ -3,7 +3,8 @@ import { WORLD } from "./config";
 import { FlightScene } from "./FlightScene";
 import { MenuScene } from "./MenuScene";
 
-// Portrait mobile-first : dimensions logiques (config.ts), mises à l'échelle sur l'écran réel.
+// Mobile-first portrait: logical size lives in config.ts and is scaled to fit
+// the real screen.
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
@@ -21,5 +22,5 @@ const game = new Phaser.Game({
   scene: [MenuScene, FlightScene]
 });
 
-// Poignée de debug/tests (Phaser 3.90 n'expose plus Phaser.GAMES).
+// Debug/test handle (Phaser 3.90 no longer exposes Phaser.GAMES).
 (window as unknown as { __moonwick?: Phaser.Game }).__moonwick = game;

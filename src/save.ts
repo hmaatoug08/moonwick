@@ -1,29 +1,29 @@
 /**
- * Persistance localStorage. Clé unique préfixée `moonwick:`.
- * Tolère un stockage indisponible (navigation privée, quotas) : le jeu
- * fonctionne alors sans persistance, sans jamais lever d'exception.
+ * localStorage persistence. Every key is prefixed with `moonwick:`.
+ * Tolerates unavailable storage (private browsing, quota): the game then runs
+ * without persistence and never throws.
  *
- * Clés utilisées :
- *   moonwick:bestScore     meilleur score (entier)
- *   moonwick:bestCombo     meilleur combo (entier, nombre de frôlements)
- *   moonwick:bestTier      index du palier le plus loin atteint (0..TIERS-1)
- *   moonwick:games         nombre de parties jouées
- *   moonwick:sound         "1" (défaut) / "0"
- *   moonwick:tutorialDone  "1" après le premier frôlement réussi
- *   moonwick:lang          "en" | "fr" | "es" | "it" — choix explicite, prime
- *                          définitivement sur navigator.language
+ * Keys in use:
+ *   moonwick:bestScore     best score (integer)
+ *   moonwick:bestCombo     best combo (integer, number of grazes)
+ *   moonwick:bestTier      index of the furthest tier reached (0..TIERS-1)
+ *   moonwick:games         number of games played
+ *   moonwick:sound         "1" (default) / "0"
+ *   moonwick:tutorialDone  "1" once the first graze has succeeded
+ *   moonwick:lang          "en" | "fr" | "es" | "it" — explicit choice, wins
+ *                          permanently over navigator.language
  *
- * Les anciennes clés `sorciere:` sont migrées automatiquement (voir plus bas).
+ * Legacy `sorciere:` keys are migrated automatically (see below).
  */
 const PREFIX = "moonwick:";
-/** Ancien préfixe, avant le renommage de la marque. */
+/** Legacy prefix, from before the brand rename. */
 const LEGACY_PREFIX = "sorciere:";
 
 /**
- * Migration silencieuse, une fois au chargement du module : toute clé
- * `sorciere:` est recopiée vers `moonwick:` puis supprimée. Les scores et
- * réglages existants sont donc conservés, sans que le joueur voie rien.
- * On n'écrase jamais une valeur déjà présente sous le nouveau préfixe.
+ * Silent migration, run once when the module loads: every `sorciere:` key is
+ * copied to `moonwick:` and then removed. Existing scores and settings are
+ * kept without the player noticing anything.
+ * A value already present under the new prefix is never overwritten.
  */
 function migrateLegacyKeys(): void {
   try {
@@ -41,7 +41,7 @@ function migrateLegacyKeys(): void {
       localStorage.removeItem(legacyKey);
     }
   } catch {
-    // Stockage indisponible : rien à migrer, le jeu tourne sans persistance.
+    // Storage unavailable: nothing to migrate, the game runs without it.
   }
 }
 
@@ -59,7 +59,7 @@ function write(key: string, value: string): void {
   try {
     localStorage.setItem(PREFIX + key, value);
   } catch {
-    // Stockage indisponible : on joue sans persistance.
+    // Storage unavailable: we play without persistence.
   }
 }
 
@@ -79,7 +79,7 @@ export function loadStats(): Stats {
   };
 }
 
-/** Enregistre une fin de partie et retourne les stats mises à jour. */
+/** Records a finished run and returns the updated stats. */
 export function recordRun(
   score: number,
   combo: number,
@@ -107,8 +107,8 @@ export function setSoundEnabled(on: boolean): void {
 }
 
 /**
- * Langue choisie explicitement par l'utilisateur, ou null si jamais choisie
- * (auquel cas i18n retombe sur la détection navigateur).
+ * Language explicitly chosen by the player, or null if never chosen (in which
+ * case i18n falls back to browser detection).
  */
 export function readLang(): string | null {
   return read("lang");
@@ -118,7 +118,7 @@ export function writeLang(lang: string): void {
   write("lang", lang);
 }
 
-/** Vrai une fois le premier frôlement réussi, pour toujours. */
+/** True once the first graze has succeeded, forever. */
 export function isTutorialDone(): boolean {
   return read("tutorialDone") === "1";
 }

@@ -3,10 +3,10 @@ import { readLang, writeLang } from "./save";
 
 export type Lang = "en" | "fr" | "es" | "it";
 
-/** Ordre d'affichage dans les réglages. */
+/** Display order in the settings panel. */
 export const LANGS: readonly Lang[] = ["en", "fr", "es", "it"];
 
-/** Noms natifs, jamais traduits : chacun se reconnaît dans sa langue. */
+/** Native names, never translated: everyone recognises their own language. */
 export const LANG_NAMES: Record<Lang, string> = {
   en: "English",
   fr: "Français",
@@ -15,10 +15,10 @@ export const LANG_NAMES: Record<Lang, string> = {
 };
 
 /**
- * Référence de clés : l'anglais fait autorité. Les trois autres langues sont
- * typées `Record<StringKey, string>`, donc une clé oubliée casse le build.
+ * Key reference: English is authoritative. The other three languages are typed
+ * as `Record<StringKey, string>`, so a forgotten key breaks the build.
  *
- * Les valeurs peuvent contenir des paramètres `{nom}`, remplacés par `t()`.
+ * Values may contain `{name}` parameters, substituted by `t()`.
  */
 const EN = {
   "menu.play": "Tap to play",
@@ -173,8 +173,8 @@ function isLang(value: string | null): value is Lang {
 }
 
 /**
- * `navigator.language` -> langue supportée, `en` par défaut.
- * On ne garde que la partie primaire ("fr-CA" -> "fr").
+ * `navigator.language` -> supported language, defaulting to `en`.
+ * Only the primary subtag is kept ("fr-CA" -> "fr").
  */
 export function detectLanguage(): Lang {
   const raw = typeof navigator !== "undefined" ? navigator.language : "";
@@ -183,8 +183,8 @@ export function detectLanguage(): Lang {
 }
 
 /**
- * Langue courante : DEBUG_FORCE_LANG > choix explicite persisté > détection.
- * Le choix de l'utilisateur prime définitivement sur la langue du navigateur.
+ * Current language: DEBUG_FORCE_LANG > persisted explicit choice > detection.
+ * The player's own choice wins permanently over the browser language.
  */
 let current: Lang = (() => {
   if (isLang(DEBUG_FORCE_LANG)) return DEBUG_FORCE_LANG;
@@ -200,8 +200,8 @@ type Listener = () => void;
 const listeners = new Set<Listener>();
 
 /**
- * S'abonner pour rafraîchir ses textes au changement de langue.
- * Retourne la fonction de désabonnement (à appeler au SHUTDOWN d'une scène).
+ * Subscribe to refresh your own texts when the language changes.
+ * Returns the unsubscribe function (call it on a scene's SHUTDOWN).
  */
 export function onLanguageChange(listener: Listener): () => void {
   listeners.add(listener);
@@ -209,8 +209,8 @@ export function onLanguageChange(listener: Listener): () => void {
 }
 
 /**
- * Change la langue, la persiste, et rafraîchit immédiatement les textes des
- * scènes abonnées — aucun rechargement.
+ * Changes the language, persists it, and immediately refreshes the texts of
+ * every subscribed scene — no reload.
  */
 export function setLanguage(lang: Lang): void {
   if (lang === current) return;
@@ -226,14 +226,14 @@ function interpolate(template: string, params?: Params): string {
   );
 }
 
-/** Chaîne traduite dans la langue courante. */
+/** String translated into the current language. */
 export function t(key: StringKey, params?: Params): string {
   return interpolate(STRINGS[current][key] ?? STRINGS.en[key], params);
 }
 
 /**
- * Toutes les traductions d'une clé. Sert à dimensionner un bouton sur la
- * chaîne la plus LONGUE des 4 langues, pas seulement sur la langue courante.
+ * Every translation of a key. Used to size a button against the LONGEST of
+ * the 4 languages, not just against the current one.
  */
 export function tAll(key: StringKey, params?: Params): string[] {
   return LANGS.map((lang) => interpolate(STRINGS[lang][key], params));

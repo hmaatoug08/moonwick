@@ -1,20 +1,20 @@
 /**
- * Toutes les constantes de gameplay au même endroit.
- * Objectif : pouvoir tuner le feel à la main sans lire le code des scènes.
+ * Every gameplay constant in one place.
+ * Goal: being able to tune the feel by hand without reading the scene code.
  */
 
 /**
- * Nom de marque. JAMAIS traduit, JAMAIS passé par i18n : il est identique
- * dans les quatre langues (voir CLAUDE.md, règle de marque).
- * Traité typographiquement comme un logo, pas comme du texte d'interface.
+ * Brand name. NEVER translated, NEVER routed through i18n: it is identical in
+ * all four languages (see CLAUDE.md, brand rule).
+ * Treated typographically as a logo, not as interface text.
  */
 export const BRAND = {
   name: "Moonwick",
   fontSizePx: 60,
-  // Interlettrage large : c'est ce qui fait lire « logo » plutôt que « titre ».
+  // Wide letter-spacing: this is what makes it read as a logo, not a title.
   letterSpacing: 11,
   color: "#f5efd8",
-  // Lueur lunaire derrière le mot, qui respire très lentement.
+  // Moon glow behind the word, breathing very slowly.
   glowColor: 0xffe9a8,
   glowSize: 460,
   glowAlphaMin: 0.09,
@@ -22,98 +22,98 @@ export const BRAND = {
   glowPulseMs: 4200
 } as const;
 
-/** Dimensions logiques (portrait), doivent correspondre au scale de main.ts. */
+/** Logical size (portrait); must match the scale config in main.ts. */
 export const WORLD = {
   width: 480,
   height: 854
 } as const;
 
-/** Vol de la sorcière : maintenir = monter, relâcher = descendre. */
+/** Witch flight: hold to rise, release to fall. */
 export const WITCH = {
   x: 110,
   radius: 14,
   gravity: 900,
   thrust: -1800,
   maxSpeed: 420,
-  // Bornes verticales : la sorcière ne sort jamais de l'écran.
+  // Vertical bounds: the witch never leaves the screen.
   marginTop: 20,
   marginBottom: 20
 } as const;
 
 /**
- * P5 — Paliers de difficulté. Le levier principal est le RESSERREMENT
- * (`gapSize`, hauteur cible du passage, troncs ET branches).
+ * P5 — Difficulty tiers. The main lever is NARROWING (`gapSize`, the target
+ * height of the gap, for trunks AND branches).
  *
- * OBJECTIF VÉRIFIABLE — dès « Les Ronces », traverser sans frôler est
- * STRUCTURELLEMENT impossible : la demi-largeur du passage, jitter au pire
- * compris, doit être < zone de frôlement (38 px), c.-à-d. passage max < 76.
- * Passage max = gapSize + max(gapJitter tronc = 4, bandJitter branche = 5).
- *   - La Lisière   : 250 + 5 = 255 -> demi 127,5  (apprentissage, tout passe)
- *   - Le Bois Noir : 140 + 5 = 145 -> demi 72,5   (pont : encore évitable)
- *   - Les Ronces   :  70 + 5 =  75 -> demi 37,5 < 38  IMPOSSIBLE sans frôler
- *   - Le Mur       :  67 + 5 =  72 -> demi 36   < 38  idem, plus serré
- *   - L'Œil        :  64 + 5 =  69 -> demi 34,5 < 38  plancher (gapFloor)
- * La vitesse ne monte que modérément (+30 %). Le dernier palier est un
- * PLATEAU : au-delà, la difficulté se fige, le skill fait la durée de la run.
+ * VERIFIABLE GOAL — from "The Brambles" onwards, crossing without grazing is
+ * STRUCTURALLY impossible: half the gap width, worst-case jitter included,
+ * must be < the graze zone (38 px), i.e. max gap < 76.
+ * Max gap = gapSize + max(trunk gapJitter = 4, branch bandJitter = 5).
+ *   - The Edge      : 250 + 5 = 255 -> half 127.5  (learning, everything fits)
+ *   - The Dark Wood : 140 + 5 = 145 -> half 72.5   (bridge: still avoidable)
+ *   - The Brambles  :  70 + 5 =  75 -> half 37.5 < 38  IMPOSSIBLE without grazing
+ *   - The Wall      :  67 + 5 =  72 -> half 36   < 38  same, tighter
+ *   - The Moon's Eye:  64 + 5 =  69 -> half 34.5 < 38  floor (gapFloor)
+ * Speed only rises moderately (+30%). The last tier is a PLATEAU: beyond it
+ * difficulty freezes and skill alone decides how long a run lasts.
  */
 export type Tier = {
-  /** Clé i18n du nom du palier (aucun libellé en dur : voir i18n.ts). */
+  /** i18n key for the tier name (no hard-coded label: see i18n.ts). */
   nameKey: "tier.edge" | "tier.darkwood" | "tier.brambles" | "tier.wall" | "tier.moonEye";
-  /** Début du palier, en secondes de jeu. */
+  /** Tier start, in seconds of play. */
   startTime: number;
   scrollSpeed: number;
-  /** Hauteur cible du passage (trou de tronc ; les branches en dérivent). */
+  /** Target gap height (trunk hole; branches derive theirs from it). */
   gapSize: number;
-  /** Intervalle d'apparition des obstacles, en secondes. */
+  /** Obstacle spawn interval, in seconds. */
   spawnInterval: number;
-  // Ambiance : teinte du ciel (haut / bas du dégradé).
+  // Mood: sky tint (top / bottom of the gradient).
   skyTop: number;
   skyBottom: number;
 };
 
 export const TIERS: readonly Tier[] = [
-  // 250+5=255, demi 127,5 : large, on apprend à frôler sans risque.
+  // 250+5=255, half 127.5: wide, you learn to graze without risk.
   { nameKey: "tier.edge",     startTime: 0,   scrollSpeed: 220, gapSize: 250, spawnInterval: 1.9,  skyTop: 0x0b0716, skyBottom: 0x241a4a },
-  // 140+5=145, demi 72,5 : dernier palier où l'évitement pur reste possible.
+  // 140+5=145, half 72.5: last tier where pure avoidance is still possible.
   { nameKey: "tier.darkwood", startTime: 25,  scrollSpeed: 240, gapSize: 140, spawnInterval: 1.75, skyTop: 0x070410, skyBottom: 0x1a1038 },
-  // 70+5=75, demi 37,5 < 38 : frôlement structurellement inévitable.
+  // 70+5=75, half 37.5 < 38: grazing becomes structurally unavoidable.
   { nameKey: "tier.brambles", startTime: 50,  scrollSpeed: 255, gapSize: 70,  spawnInterval: 1.6,  skyTop: 0x0a0512, skyBottom: 0x2a1230 },
-  // 67+5=72, demi 36 < 38.
+  // 67+5=72, half 36 < 38.
   { nameKey: "tier.wall",     startTime: 80,  scrollSpeed: 270, gapSize: 67,  spawnInterval: 1.5,  skyTop: 0x060309, skyBottom: 0x1f0d22 },
-  // 64+5=69, demi 34,5 < 38 — plancher absolu (gapFloor), plateau final.
+  // 64+5=69, half 34.5 < 38 — absolute floor (gapFloor), final plateau.
   { nameKey: "tier.moonEye",  startTime: 120, scrollSpeed: 285, gapSize: 64,  spawnInterval: 1.4,  skyTop: 0x0d0a1f, skyBottom: 0x33205c }
 ];
 
-/** Mise en scène des changements de palier. */
+/** Staging of tier changes. */
 export const TIER_FX = {
-  // Durée d'affichage du nom du palier au centre de l'écran.
+  // How long the tier name stays on screen.
   announceMs: 1500,
   announceFadeMs: 220,
-  // Interpolation des paramètres (vitesse, passage, ciel) entre paliers.
+  // Interpolation of parameters (speed, gap, sky) between tiers.
   transitionS: 2
 } as const;
 
 /**
- * Debug : démarrer directement à un palier (index dans TIERS) pour le tester
- * sans rejouer les 80 premières secondes. -1 = désactivé (départ normal).
+ * Debug: start directly at a tier (index into TIERS) to test it without
+ * replaying the first 80 seconds. -1 = disabled (normal start).
  */
 export const DEBUG_START_TIER = -1;
 
 /**
- * Debug : force une langue sans toucher aux réglages du navigateur ni au
- * choix persisté. null = comportement normal (choix explicite, sinon
- * détection via navigator.language). Voir i18n.ts.
+ * Debug: force a language without touching browser settings or the persisted
+ * choice. null = normal behaviour (explicit choice, otherwise detection via
+ * navigator.language). See i18n.ts.
  */
 export const DEBUG_FORCE_LANG: "en" | "fr" | "es" | "it" | null = null;
 
 /**
- * Traînée à particules — INDICATEUR PRINCIPAL du multiplicateur.
- * Le joueur doit lire son combo dans sa traînée, pas dans le chiffre du HUD :
- * rare et terne à ×1, dense et lumineuse à ×5. Chaque paire `…Idle` / `…Max`
- * est interpolée sur le multiplicateur courant.
+ * Particle trail — the PRIMARY indicator of the multiplier.
+ * The player should read their combo in the trail, not in the HUD number:
+ * sparse and dull at x1, dense and bright at x5. Each `…Idle` / `…Max` pair
+ * is interpolated against the current multiplier.
  */
 export const TRAIL = {
-  // Intervalle d'émission (ms). Au plus bas, la traînée devient continue.
+  // Emission interval (ms). At its lowest the trail becomes continuous.
   frequencyIdle: 55,
   frequencyMax: 6,
   lifespanIdle: 260,
@@ -122,91 +122,92 @@ export const TRAIL = {
   scaleMax: 0.95,
   alphaIdle: 0.32,
   alphaMax: 0.9,
-  // Plage de vitesse de recul et ouverture du cône, vers l'arrière.
-  // Fixes : c'est la densité, la taille et la couleur qui portent le combo.
+  // Backward drift speed range and cone spread.
+  // Fixed: density, size and colour are what carry the combo.
   driftMin: 70,
   driftMax: 170,
   spreadDeg: 16,
   colorIdle: 0x6b4fa0,
   colorMax: 0xffd27a,
-  // Décalage d'émission derrière la sorcière.
+  // Emission offset, behind the witch.
   offsetX: -11
 } as const;
 
-/** Génération procédurale des obstacles. Cadence et passages pilotés par TIERS. */
+/** Procedural obstacle generation. Pace and gaps are driven by TIERS. */
 export const OBSTACLES = {
-  // Variation aléatoire (+/-) autour du spawnInterval du palier, en fraction.
-  // Évite l'effet métronome sans casser la contrainte d'équité (clampée après).
+  // Random variation (+/-) around the tier's spawnInterval, as a fraction.
+  // Avoids a metronome feel without breaking the fairness constraint
+  // (which is clamped afterwards).
   intervalJitter: 0.15,
-  // Délai avant le premier obstacle : petit run-up pour prendre le vol en main.
+  // Delay before the first obstacle: a short run-up to settle into flying.
   firstDelay: 0.9,
-  // Apparition hors écran à droite, suppression hors écran à gauche.
+  // Spawn off-screen right, despawn off-screen left.
   spawnMargin: 40,
   despawnX: -80,
 
-  // On ne place jamais le passage collé au haut ou au bas de l'écran.
+  // The gap is never placed flush against the top or bottom of the screen.
   safeMarginTop: 90,
   safeMarginBottom: 90,
-  // Marge de vol laissée autour du passage (rayon sorcière + respiration).
-  // Réduite automatiquement quand le passage devient plus étroit qu'elle.
+  // Flight margin kept around the gap (witch radius + breathing room).
+  // Automatically reduced when the gap becomes narrower than the margin.
   clearance: 48,
-  // Décalage vertical max du passage d'un obstacle au suivant : garantit
-  // que le trou suivant est toujours atteignable à vitesse de vol max.
+  // Max vertical shift of the gap from one obstacle to the next: guarantees
+  // the next hole is always reachable at maximum flight speed.
   maxGapShift: 260,
-  // Plancher absolu d'un passage, quel que soit le palier : en dessous,
-  // le jeu deviendrait littéralement infranchissable (hitbox 2x10 px + marge).
+  // Absolute floor for a gap, whatever the tier: below this the game would
+  // be literally impassable (2x10 px hitbox + margin).
   gapFloor: 64,
 
-  // Fréquence relative des 3 types. Le tronc est le plus dur, donc plus rare.
+  // Relative frequency of the 3 types. Trunks are hardest, so rarest.
   weights: {
     branchTop: 4,
     branchBottom: 4,
     trunk: 3
   },
 
-  // Branches (hautes ou basses) : une barre qui dépasse d'un bord.
-  // Bande libre = gapSize x bandFactor +/- bandJitter. Facteur 1 et jitters
-  // serrés : la garantie « demi-passage < 38 px dès Les Ronces » (voir TIERS)
-  // doit valoir pour TOUS les types, sinon les branches restent une échappatoire.
-  // La variété vient de la POSITION du passage, pas de sa taille.
+  // Branches (top or bottom): a bar jutting in from one edge.
+  // Free band = gapSize x bandFactor +/- bandJitter. Factor 1 and tight
+  // jitter: the "half-gap < 38 px from The Brambles" guarantee (see TIERS)
+  // must hold for ALL types, otherwise branches stay an escape hatch.
+  // Variety comes from the gap's POSITION, not its size.
   branch: {
     width: 26,
     lengthMin: 120,
     bandFactor: 1.0,
     bandJitter: 5,
-    // Si le côté tiré au sort doit rester plus large que l'autre d'au moins
-    // cette marge (garantie d'atteignabilité), on change de côté.
+    // If the randomly picked side would stay wider than the other by at
+    // least this margin (reachability guarantee), we switch sides.
     sideSwitchSlack: 40
   },
 
-  // Tronc traversant : trou = gapSize du palier +/- jitter (petit : la
-  // contrainte des Ronces est calculée jitter au pire compris).
+  // Full-height trunk: hole = the tier's gapSize +/- jitter (small: the
+  // Brambles constraint is computed with worst-case jitter included).
   trunk: {
     width: 30,
     gapJitter: 4
   },
 
-  // Silhouette sombre + liseré clair : les obstacles doivent se lire
-  // instantanément sur le dégradé du ciel (lisibilité = jouabilité).
-  // INVARIANT : le liseré est permanent et se RENFORCE quand la lumière
-  // baisse — la lisibilité des obstacles n'est jamais dégradée par un effet.
+  // Dark silhouette + bright outline: obstacles must read instantly against
+  // the sky gradient (readability = playability).
+  // INVARIANT: the outline is permanent and STRENGTHENS as light fades —
+  // obstacle readability is never degraded by any visual effect.
   colors: {
     fill: 0x0c0618,
     trunkFill: 0x080410,
     stroke: 0x7a5ad0,
-    // Alpha du liseré : pleine lumière -> obscurité maximale.
+    // Outline alpha: full light -> maximum darkness.
     strokeAlphaLit: 0.55,
     strokeAlphaDark: 1
   }
 } as const;
 
 /**
- * Poussières d'ambiance (décor de fond) : chaudes et présentes quand la
- * magie est pleine, raréfiées et froides quand le combo est perdu.
- * Décor uniquement : dessinées SOUS l'overlay, jamais sur la couche de jeu.
+ * Ambient dust (background scenery): warm and present when magic is full,
+ * sparse and cold once the combo is lost.
+ * Scenery only: drawn UNDER the overlay, never on the gameplay layer.
  */
 export const AMBIENT = {
-  // Intervalle d'émission (ms) : magie pleine -> combo perdu.
+  // Emission interval (ms): full magic -> combo lost.
   frequencyLit: 160,
   frequencyCold: 900,
   alphaLit: 0.45,
@@ -220,79 +221,79 @@ export const AMBIENT = {
 } as const;
 
 /**
- * Near-miss : le cœur du jeu. Les distances sont mesurées de la sorcière
- * à la SURFACE de l'obstacle (pas de centre à centre).
+ * Near-miss: the heart of the game. Distances are measured from the witch to
+ * the obstacle SURFACE (not centre to centre).
  */
 export const NEAR_MISS = {
-  // Hitbox mortelle volontairement plus petite que le visuel (WITCH.radius) :
-  // le joueur doit avoir l'impression d'être passé de justesse, pas d'être volé.
+  // Lethal hitbox deliberately smaller than the visual (WITCH.radius): the
+  // player should feel they slipped through, never that they were robbed.
   deathRadius: 10,
-  // Anneau de frôlement : deathRadius < d <= grazeRadius.
+  // Graze ring: deathRadius < d <= grazeRadius.
   grazeRadius: 38,
-  // NB : le délai avant retour à ×1 est porté par la jauge (MAGIC.max),
-  // qui est le minuteur du combo. Pas de second compteur en parallèle.
-  // Multiplicateur = 1 + combo * step, plafonné (plafond = "Pleine Lune" en P4).
+  // NB: the delay before falling back to x1 is carried by the gauge
+  // (MAGIC.max), which is the combo timer. No second counter in parallel.
+  // Multiplier = 1 + combo * step, capped (the cap is "Full Moon", P4).
   multiplierStep: 0.5,
   multiplierMax: 5
 } as const;
 
 export const SCORING = {
-  // Points par frôlement, multipliés par le multiplicateur courant.
-  // Quand le combo est actif, c'est la SEULE source de score.
+  // Points per graze, multiplied by the current multiplier.
+  // While the combo is active this is the ONLY source of score.
   grazePoints: 10,
-  // DARK_POINTS dégressifs : au sein d'une même traversée dans l'obscurité
-  // (combo à 0), le Nième obstacle dépassé rapporte la Nième valeur, puis la
-  // dernière (0) au-delà. Le compteur repart quand un frôlement relance le
-  // combo. La passivité ne rapporte donc jamais plus, elle s'ÉTEINT — aucune
-  // source de points ne croît avec le temps de survie.
+  // Decaying DARK_POINTS: within a single run through the dark (combo at 0),
+  // the Nth obstacle passed awards the Nth value, then the last one (0)
+  // beyond that. The counter restarts when a graze revives the combo.
+  // Passivity therefore never pays more, it FADES OUT — no source of points
+  // grows with survival time.
   darkPointsSequence: [1, 1, 1, 0]
 } as const;
 
 /**
- * Jauge de magie : elle descend en continu et SEUL un frôlement la recharge.
- * C'est le minuteur du multiplicateur, PAS une barre de vie : à 0 le
- * multiplicateur retombe à ×1 et la partie continue. On ne meurt qu'en
- * touchant un obstacle. Le joueur qui évite tout reste en jeu, mais il joue
- * sans multiplicateur et dans le noir — la pression est visuelle, pas létale.
+ * Magic gauge: it drains continuously and ONLY a graze refills it.
+ * It is the multiplier timer, NOT a health bar: at 0 the multiplier drops
+ * back to x1 and the run continues. You only die by touching an obstacle.
+ * A player who avoids everything stays alive, but plays without a multiplier
+ * and in the dark — the pressure is visual, not lethal.
  */
 export const MAGIC = {
-  // Secondes avant que le multiplicateur ne retombe à ×1.
+  // Seconds before the multiplier falls back to x1.
   max: 4,
-  // Vitesse de décroissance, en unités de jauge par seconde.
+  // Drain rate, in gauge units per second.
   drainPerSecond: 1,
 
-  // Avertissement : sous ce seuil la sorcière clignote pour signaler que le
-  // multiplicateur va sauter. Purement visuel, ne déclenche aucune mort.
+  // Warning: below this threshold the witch flickers to signal the multiplier
+  // is about to break. Purely visual, never causes a death.
   flickerGrace: 1.2,
-  // Clignotement de la sorcière / pulsation du voile, en battements par seconde.
+  // Witch flicker / veil pulse, in beats per second.
   flickerPulseHz: 6,
-  // De combien le voile s'éclaircit au sommet de chaque pulsation.
+  // How much the veil lightens at the peak of each pulse.
   flickerDarkSwing: 0.18,
-  // Alpha bas de la sorcière quand elle clignote.
+  // Low alpha of the witch while flickering.
   flickerWitchAlpha: 0.25,
 
-  // Fraction de `max` tolérée entre deux occasions de recharger.
-  // Sert de garde-fou au générateur (voir obstacles.ts) : au-delà, le
-  // multiplicateur sauterait sans qu'aucun obstacle ne soit passé à portée.
+  // Fraction of `max` tolerated between two chances to refill.
+  // Acts as the generator's guard rail (see obstacles.ts): beyond it the
+  // multiplier would break without a single obstacle coming within reach.
   grazeWindowFactor: 0.6,
 
-  // Assombrissement : alpha de l'overlay noir jauge pleine -> jauge vide.
-  // PUREMENT COSMÉTIQUE, et il ne touche QUE le fond et le décor : l'overlay
-  // est dessiné SOUS les obstacles, leurs halos et la sorcière (invariant de
-  // lisibilité — voir CLAUDE.md, Affordance). Plafonné bas : c'est la
-  // désaturation qui porte la sensation de perte, pas le noir.
+  // Darkening: black overlay alpha, full gauge -> empty gauge.
+  // PURELY COSMETIC, and it only touches background and scenery: the overlay
+  // is drawn UNDER obstacles, their halos and the witch (readability
+  // invariant — see CLAUDE.md, Affordance). Capped low: desaturation, not
+  // blackness, is what carries the feeling of loss.
   darkAlphaFull: 0,
   darkAlphaEmpty: 0.5,
-  // Rayon du halo de lumière autour de la sorcière, jauge pleine -> vide.
+  // Radius of the light hole around the witch, full gauge -> empty.
   lightRadiusFull: 460,
   lightRadiusEmpty: 95,
 
-  // Refroidissement du décor quand la magie baisse : le ciel se désature et
-  // vire au gris bleuté (0 = intact, 1 = gris), la lune pâlit.
+  // Scenery cooling as magic fades: the sky desaturates towards blue-grey
+  // (0 = untouched, 1 = grey) and the moon pales.
   desatMax: 0.75,
   coldMoonColor: 0xb9c2d6,
 
-  // Barre fine sous le score.
+  // Thin bar under the score.
   barWidth: 170,
   barHeight: 5,
   barY: 158,
@@ -300,27 +301,26 @@ export const MAGIC = {
   barTrackAlpha: 0.12
 } as const;
 
-/** Retours visuels du frôlement : halo des obstacles + textes flottants. */
+/** Graze feedback: obstacle halos + floating texts. */
 export const FEEDBACK = {
-  // Halo violet qui matérialise la zone de frôlement (NEAR_MISS.grazeRadius).
+  // Violet halo that materialises the graze zone (NEAR_MISS.grazeRadius).
   haloColor: 0x9b6bff,
   haloAlpha: 0.15,
-  // Quand la sorcière est dans la zone.
+  // While the witch is inside the zone.
   haloAlphaActive: 0.5,
 
-  // Textes flottants : montée et disparition.
+  // Floating texts: rise and fade.
   floatMs: 600,
   floatRise: 48,
   grazeColor: "#f2c8ff",
-  // Le +1 des points d'obscurité : petit et discret, il ne doit jamais
-  // concurrencer le FRÔLÉ ! — c'est un lot de consolation, pas une récompense.
+  // The +1 of dark points: small and discreet, it must never compete with
+  // the graze text — it is a consolation prize, not a reward.
   darkColor: "#8877aa"
 } as const;
 
 /**
- * Secousse de caméra au frôlement. Doit rester SOUS le seuil de conscience :
- * on veut que ça se sente, pas que ça se remarque. Désactivée si le système
- * demande des animations réduites.
+ * Camera shake on a graze. Must stay BELOW conscious perception: it should be
+ * felt, not noticed. Disabled when the system asks for reduced motion.
  */
 export const SHAKE = {
   minPx: 2,
@@ -329,9 +329,10 @@ export const SHAKE = {
 } as const;
 
 /**
- * Ralenti sur frôlement extrême — le moment que le joueur voudra filmer.
- * Déclenché sous `thresholdPx` de la surface (rappel : la mort est à 10 px,
- * donc la fenêtre est étroite et se mérite). Désactivé en animations réduites.
+ * Slow motion on an extreme graze — the moment players will want to record.
+ * Triggered below `thresholdPx` from the surface (reminder: death is at
+ * 10 px, so the window is narrow and has to be earned).
+ * Disabled under reduced motion.
  */
 export const SLOWMO = {
   thresholdPx: 18,
@@ -340,82 +341,82 @@ export const SLOWMO = {
 } as const;
 
 /**
- * Mode Pleine Lune : atteint quand le multiplicateur touche son plafond.
- * Tout doit changer d'un coup — lune, palette, traînée — pour que le joueur
- * sache qu'il est dans un état exceptionnel sans lire un seul chiffre.
+ * Full Moon mode: reached when the multiplier hits its cap.
+ * Everything must change at once — moon, palette, trail — so the player knows
+ * they are in an exceptional state without reading a single number.
  */
 export const FULL_MOON = {
   fadeMs: 320,
-  // La lune grossit et s'entoure d'un halo.
+  // The moon grows and gains a halo.
   moonScale: 1.4,
   glowRadius: 82,
   glowColor: 0xffe9a8,
   glowAlpha: 0.3,
-  // Voile doré additif sur toute la scène.
+  // Additive golden veil over the whole scene.
   veilColor: 0xffb43c,
   veilAlpha: 0.11,
-  // La sorcière elle-même vire à l'or.
+  // The witch herself turns to gold.
   witchColor: 0xffe0a0,
   witchColorNormal: 0xd9a7ff
 } as const;
 
 /**
- * Sons synthétisés en Web Audio, aucun fichier externe (règle P4).
- * Volume volontairement bas : le jeu se joue souvent sans son, il ne doit
- * jamais surprendre. `masterVolume` est le seul curseur à toucher.
+ * Sounds synthesised with Web Audio, no external files (P4 rule).
+ * Volume deliberately low: the game is often played muted and must never
+ * startle. `masterVolume` is the only knob to touch.
  */
 export const SFX = {
   masterVolume: 0.12,
-  // Swoosh de frôlement : bruit filtré dont la hauteur monte avec le combo.
+  // Graze swoosh: filtered noise whose pitch rises with the combo.
   swooshBaseHz: 620,
   swooshHzPerCombo: 95,
   swooshMaxHz: 2200,
   swooshMs: 130,
-  // Impact grave à la mort.
+  // Low impact on death.
   deathFromHz: 140,
   deathToHz: 38,
   deathMs: 620
 } as const;
 
 /**
- * Apprentissage sans tutoriel, première partie uniquement : le premier
- * obstacle porte un halo exagéré et le mot « FRÔLE ». Disparaît pour
- * toujours au premier frôlement réussi. Aucune popup, aucun skip.
+ * Tutorial-free onboarding, first run only: the first obstacle carries an
+ * exaggerated halo and the graze word. Gone forever after the first
+ * successful graze. No popup, nothing to skip.
  */
 export const TEACH = {
   haloAlpha: 0.5,
   haloAlphaActive: 0.85,
-  // Le mot lui-même vient de i18n (clé "teach.word") : aucun libellé en dur.
+  // The word itself comes from i18n (key "teach.word"): no hard-coded label.
   fontSizePx: 34,
   color: "#f2c8ff",
-  // Position du mot : à gauche de l'obstacle, au centre de son passage.
+  // Word placement: left of the obstacle, centred on its gap.
   offsetX: -96
 } as const;
 
 export const RESTART = {
-  // Délai mini avant d'accepter le tap de relance : évite de repartir
-  // sans avoir vu l'écran de mort si le doigt était déjà en train de retomber.
+  // Minimum delay before accepting the replay tap: prevents restarting
+  // without seeing the death screen if the finger was already coming down.
   minDeathMs: 100
 } as const;
 
-/** Dessine la hitbox mortelle, l'anneau de frôlement et les formes de collision. */
+/** Draws the lethal hitbox, the graze ring and the collision shapes. */
 export const DEBUG_HITBOX = false;
 
-/** Overlay de debug en haut à gauche : fps, vitesse, nom du palier. */
+/** Debug overlay, top left: fps, speed, tier name. */
 export const DEBUG_STATS = false;
 
-// --- Garde-fou (dev uniquement) : contrainte d'équité des paliers.
-// Chaque obstacle est la seule occasion de recharger le minuteur de combo :
-// aucun palier ne doit espacer les obstacles au-delà de MAGIC.max * 0.6 s,
-// jitter compris, sinon le combo casse sans faute du joueur.
+// --- Guard rail (dev only): tier fairness constraint.
+// Every obstacle is the only chance to refill the combo timer, so no tier may
+// space obstacles beyond MAGIC.max * 0.6 s, jitter included — otherwise the
+// combo breaks through no fault of the player.
 if (import.meta.env.DEV) {
   const limit = MAGIC.max * MAGIC.grazeWindowFactor;
   for (const tier of TIERS) {
     const worst = tier.spawnInterval * (1 + OBSTACLES.intervalJitter);
     if (worst > limit) {
       throw new Error(
-        `TIERS « ${tier.nameKey} » : spawnInterval ${tier.spawnInterval}s ` +
-          `(pire cas ${worst.toFixed(2)}s avec jitter) dépasse la limite ` +
+        `TIERS "${tier.nameKey}": spawnInterval ${tier.spawnInterval}s ` +
+          `(worst case ${worst.toFixed(2)}s with jitter) exceeds the limit ` +
           `MAGIC.max * grazeWindowFactor = ${limit}s`
       );
     }

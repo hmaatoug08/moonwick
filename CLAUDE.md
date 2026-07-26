@@ -1,117 +1,117 @@
-# Moonwick — jeu mobile near-miss
+# Moonwick — mobile near-miss game
 
 ## Vision
-**Moonwick** — jeu hypercasual portrait, une main, sessions de 30-90 s. Une sorcière sur balai vole de nuit dans une forêt maudite. **Frôler les obstacles charge sa magie** : la traînée s'illumine, le multiplicateur monte, jusqu'au mode "Pleine Lune" (×5). Toucher un obstacle = mort. Restart < 1 seconde.
+**Moonwick** — a hypercasual portrait game, one hand, 30-90 second sessions. A witch on a broomstick flies through a cursed forest at night. **Grazing obstacles charges her magic**: the trail lights up, the multiplier climbs, all the way to "Full Moon" (x5). Touching an obstacle = death. Restart in under a second.
 
-Critère n°1 de toute décision : *le joueur veut-il immédiatement rejouer après avoir perdu ?*
-Critère n°2 : *un nouveau joueur comprend-il en 10 secondes qu'il doit frôler, sans tutoriel ?*
+Decision criterion #1: *does the player want to replay immediately after losing?*
+Criterion #2: *does a new player understand within 10 seconds that they must graze, with no tutorial?*
 
 ## Stack
-- Phaser 3 + TypeScript + Vite. Cible : 60 fps sur mobile milieu de gamme.
-- `npm run dev` pour développer, `npm run build` pour valider (tsc + vite).
-- Capacitor en Phase 7 seulement. Aucun backend, aucune dépendance serveur.
+- Phaser 3 + TypeScript + Vite. Target: 60 fps on a mid-range phone.
+- `npm run dev` to develop, `npm run build` to validate (tsc + vite).
+- Capacitor in Phase 7 only. No backend, no server dependency.
 
-## Règles de développement (IMPORTANT)
-1. **Une phase à la fois.** Ne jamais implémenter des fonctionnalités d'une phase future sans demande explicite.
-2. **Simplicité maximale.** Pas d'ECS, pas de state manager, pas de framework d'architecture. Des scènes Phaser et des classes simples suffisent.
-3. **Le game feel prime sur le code élégant.** Toutes les constantes de gameplay vivent dans `config.ts` et doivent être tunables à la main.
-4. **Ne jamais réintroduire une mécanique listée dans "Décisions" comme abandonnée.**
-5. Après chaque modification : vérifier que `npm run build` passe et indiquer comment tester manuellement.
-6. Commentaires en français, concis.
-7. **Moonwick est un nom de marque, jamais traduit, jamais passé par i18n.** Il vit dans `BRAND` (config.ts) et se traite typographiquement comme un logo, pas comme du texte d'interface.
+## Development rules (IMPORTANT)
+1. **One phase at a time.** Never implement features from a future phase without an explicit request.
+2. **Maximum simplicity.** No ECS, no state manager, no architecture framework. Phaser scenes and plain classes are enough.
+3. **Game feel beats elegant code.** Every gameplay constant lives in `config.ts` and must be tunable by hand.
+4. **Never reintroduce a mechanic listed as abandoned in "Decisions".**
+5. After every change: check that `npm run build` passes and explain how to test manually.
+6. **All source code in English** — comments, identifiers, documentation. The only French, Spanish and Italian text in the repo is the translation strings inside `i18n.ts`.
+7. **Moonwick is a brand name, never translated, never routed through i18n.** It lives in `BRAND` (config.ts) and is treated typographically as a logo, not as interface text.
 
-## Règles du jeu (état actuel — fait autorité)
+## Game rules (current state — authoritative)
 
-### Vol
-Maintenir = monter, relâcher = descendre. Gravité douce, vitesse clampée.
+### Flight
+Hold = climb, release = descend. Gentle gravity, clamped speed.
 
-### Mort
-**Uniquement par contact avec un obstacle.** Aucune autre source de mort dans le jeu.
-- Hitbox mortelle : cercle r=10 centré sur la sorcière, volontairement plus petit que le visuel (générosité perçue).
-- Écran de mort minimal : score + "Tape pour rejouer". Restart < 300 ms. Le tap de relance ne doit pas être interprété comme un input de vol.
+### Death
+**Only by contact with an obstacle.** There is no other source of death in the game.
+- Lethal hitbox: a 10 px radius circle centred on the witch, deliberately smaller than the visual (perceived generosity).
+- Death screen: score + cause + run summary + a giant Replay button. Restart < 300 ms. The replay tap must never be read as a flight input.
 
-### Frôlement (near-miss)
-- Zone de frôlement : anneau 10 < d ≤ 38 px de la **surface** de l'obstacle (distance point-rectangle réelle, pas centre-à-centre).
-- Un frôlement maximum par obstacle (flag `grazed`).
-- `onGrazeEnter` → recharge immédiate du minuteur de combo.
-- `onGrazeExit` → attribution du score et incrément du combo.
+### Graze (near-miss)
+- Graze zone: a ring 10 < d <= 38 px from the obstacle **surface** (a real point-to-rectangle distance, not centre to centre).
+- One graze maximum per obstacle (`grazed` flag).
+- `onGrazeEnter` -> immediate refill of the combo timer.
+- `onGrazeExit` -> score award and combo increment.
 
-### Combo et multiplicateur
-- Combo +1 par frôlement. Multiplicateur = 1 + combo/2, plafonné à **×5 (Pleine Lune)**.
-- **Minuteur de combo** (`MAGIC_MAX = 4` s) : décroît en continu, rechargé à chaque frôlement.
-- À 0 : `combo = 0`, multiplicateur ×1, **la partie continue**. Le minuteur n'est pas une barre de vie.
-- L'assombrissement de l'écran quand le minuteur baisse est du **feedback visuel pur**, sans effet mécanique.
+### Combo and multiplier
+- Combo +1 per graze. Multiplier = 1 + combo/2, capped at **x5 (Full Moon)**.
+- **Combo timer** (`MAGIC.max = 4` s): drains continuously, refilled by every graze.
+- At 0: `combo = 0`, multiplier x1, **the run continues**. The timer is not a health bar.
+- The screen darkening as the timer drops is **pure visual feedback**, with no mechanical effect.
 
 ### Score
-- Frôlement : **10 × multiplicateur**. Affiché en grand à la position du frôlement (`FRÔLÉ ! +N`).
-- Obstacle dépassé **alors que le combo est à 0** : `DARK_POINTS_SEQUENCE = [1, 1, 1, 0]` — le Nième obstacle de la traversée en cours rapporte la Nième valeur, puis **0 au-delà**. Affiché en petit et discret (rien n'est affiché quand la valeur est 0).
-- Le compteur de la séquence **repart à zéro dès qu'un frôlement relance le combo**.
-- Obstacle dépassé alors que le combo est actif : **0 point**. Seuls les frôlements marquent.
-- Les points d'obscurité ne doivent **jamais** augmenter avec le temps de survie ni avec le nombre d'obstacles : ils **s'éteignent**. Aucune autre source de points passive.
+- Graze: **10 x multiplier**. Shown large at the graze position.
+- Obstacle passed **while the combo is at 0**: `SCORING.darkPointsSequence = [1, 1, 1, 0]` — the Nth obstacle of the current run through the dark awards the Nth value, then **0 beyond that**. Shown small and discreet (nothing is shown when the value is 0).
+- The sequence counter **restarts as soon as a graze revives the combo**.
+- Obstacle passed while the combo is active: **0 points**. Only grazes score.
+- Dark points must **never** grow with survival time or obstacle count: they **fade out**. There is no other passive source of points.
 
-### Balise (beacon)
-- Après `DROUGHT_THRESHOLD = 3` obstacles dépassés avec le combo à 0, la lumière de la sorcière pulse (~2 Hz) et les halos des obstacles à venir pulsent en synchro.
-- Aide visuelle uniquement : aucun effet mécanique, aucun bonus.
+### Beacon
+- After `DROUGHT_THRESHOLD = 3` obstacles passed with the combo at 0, the witch's light pulses (~2 Hz) and upcoming obstacle halos pulse in sync.
+- Visual aid only: no mechanical effect, no bonus.
 
 ### Affordance
-- La zone de frôlement est dessinée comme un halo violet translucide **autour de chaque obstacle** (alpha 0.15, → 0.5 quand la sorcière est dedans). C'est le principal enseignant de la règle.
-- La densité et la luminosité de la traînée sont l'indicateur principal du multiplicateur — le joueur ne doit pas avoir à lire un chiffre.
-- **INVARIANT de lisibilité : les obstacles et leurs halos de frôlement ne sont jamais assombris ni dégradés par un effet visuel** (perte de combo, transitions de palier, Pleine Lune…). L'overlay d'obscurité est dessiné **sous** la couche de jeu et ne touche que le fond et le décor ; la perte de combo s'exprime par **désaturation/refroidissement** du décor (overlay plafonné à 0.5), et le liseré clair des obstacles se **renforce** quand la lumière baisse. C'est l'information dont le joueur a le plus besoin quand il est à ×1 — toute future DA doit préserver cet invariant.
+- The graze zone is drawn as a translucent violet halo **around every obstacle** (alpha 0.15, -> 0.5 when the witch is inside). It is the main teacher of the rule.
+- Trail density and brightness are the primary indicator of the multiplier — the player should never have to read a number.
+- **READABILITY INVARIANT: obstacles and their graze halos are never darkened or degraded by any visual effect** (combo loss, tier transitions, Full Moon, and so on). The darkness overlay is drawn **under** the gameplay layer and only touches the background and scenery; combo loss is expressed through **desaturation and cooling** of the scenery (overlay capped at 0.5), and the bright obstacle outline **strengthens** as the light fades. This is the information the player needs most when at x1 — any future art direction must preserve this invariant.
 
 ## Roadmap
-- [x] **P1 — Squelette** : vol maintenir/relâcher, obstacle qui défile, 60 fps.
-- [x] **P2 — Procédural** : génération d'obstacles variés, espacement jouable, scroll constant.
-- [x] **P3 — Near-miss + mort** : hitbox, zone de frôlement, combo, score, restart instantané.
-- [x] **P4 — Game feel** : particules liées au combo, screen shake léger, slow-motion sur frôlement extrême, mode Pleine Lune, sons Web Audio synthétisés.
-- [x] **P5 — Difficulté** : paliers temporels dans `TIERS` (config.ts) — **La Lisière** (0 s, `gapSize` 250), **Le Bois Noir** (25 s, 140), **Les Ronces** (50 s, 70), **Le Mur** (80 s, 67), **L'Œil de la Lune** (120 s, 64 — plateau final : la difficulté se fige, le skill fait la durée). Levier principal = resserrement ; vitesse en hausse modérée (220 → 285 px/s). **Dès Les Ronces, la demi-largeur du passage (jitter au pire compris) est < 38 px : traverser sans frôler est structurellement impossible** — le calcul est commenté par palier dans config.ts, et le générateur pose un tronc quand aucune branche ne peut se resserrer sans devenir inatteignable. Transitions : nom affiché ~1,5 s, paramètres et ciel interpolés sur 2 s. Contrainte d'équité (`spawnInterval` < `MAGIC_MAX * 0.6`) garantie à chaque tirage + assertion en dev. `DEBUG_START_TIER` pour démarrer à un palier donné.
-- [x] **P6 — Meta légère** : `MenuScene` (titre, meilleur score, tap plein écran, toggle son, décor animé avec sorcière en boucle) ; persistance localStorage ; écran de mort enrichi (score, palier, meilleur combo de la run, « Nouveau record ! », **Rejouer** occupant le bas de l'écran) ; **image de score partageable** 1080×1920 générée sur canvas hors écran (Web Share API avec fichier, sinon téléchargement PNG) ; apprentissage sans tutoriel à la première partie (halo exagéré + « FRÔLE », disparaît définitivement au premier frôlement) ; **pause automatique** sur `visibilitychange`/blur avec reprise au tap, sans mort possible pendant l'absence.
-- [ ] **P7 — Mobile** : Capacitor, builds iOS/Android, safe areas, haptics.
-- [ ] **P8 — Monétisation/analytics** : AdMob rewarded ("continuer" 1×/partie), interstitiel max 1/3 parties, IAP no-ads.
+- [x] **P1 — Skeleton**: hold/release flight, one scrolling obstacle, 60 fps.
+- [x] **P2 — Procedural**: varied obstacle generation, playable spacing, constant scroll.
+- [x] **P3 — Near-miss + death**: hitbox, graze zone, combo, score, instant restart.
+- [x] **P4 — Game feel**: combo-driven particles, light screen shake, slow motion on extreme grazes, Full Moon mode, synthesised Web Audio sounds.
+- [x] **P5 — Difficulty**: time-based tiers in `TIERS` (config.ts) — **The Edge** (0 s, `gapSize` 250), **The Dark Wood** (25 s, 140), **The Brambles** (50 s, 70), **The Wall** (80 s, 67), **The Moon's Eye** (120 s, 64 — final plateau: difficulty freezes, skill decides run length). Main lever = narrowing; speed rises moderately (220 -> 285 px/s). **From The Brambles onwards, half the gap width (worst-case jitter included) is < 38 px: crossing without grazing is structurally impossible** — the calculation is commented per tier in config.ts, and the generator places a trunk whenever no branch can be narrowed without becoming unreachable. Transitions: name shown ~1.5 s, parameters and sky interpolated over 2 s. Fairness constraint (`spawnInterval` < `MAGIC.max * 0.6`) guaranteed on every draw plus a dev assertion. `DEBUG_START_TIER` to start at a given tier.
+- [x] **P6 — Light meta**: `MenuScene` (logo, best score, full-screen tap, settings, animated scenery with a looping witch); localStorage persistence; enriched death screen (score, tier, best combo of the run, "New record!", **Replay** filling the bottom of the screen); **shareable score image** 1080x1920 generated on an off-screen canvas (Web Share API with a file, otherwise a PNG download); tutorial-free onboarding on the first run (exaggerated halo + graze word, gone for good after the first graze); **automatic pause** on `visibilitychange`/blur with resume on tap, and no death possible while away.
+- [ ] **P7 — Mobile**: Capacitor, iOS/Android builds, safe areas, haptics.
+- [ ] **P8 — Monetisation/analytics**: AdMob rewarded ("continue" once per run), interstitial at most every 3 runs, no-ads IAP.
 
-## Décisions (historique — ne pas revenir en arrière)
-- **Jauge de magie comme barre de vie → abandonnée.** Elle tuait des joueurs qui passaient correctement les obstacles. C'est désormais le minuteur du multiplicateur, rien d'autre. `FLICKER_GRACE` et la mort par magie éteinte sont supprimés.
-- **Sursaut ×4 après traversée dans le noir → abandonné.** Récompensait l'arrêt volontaire du frôlement (farm du bonus de retour). Remplacé par `DARK_POINTS = 1` + la balise visuelle.
-- **Points de traversée systématiques → abandonnés.** Ils diluaient la lecture quand le combo est actif. Conservés uniquement dans l'obscurité, à valeur fixe.
-- **Recharge du minuteur à la sortie de zone → abandonnée** au profit de l'entrée, qui supprimait des morts perçues comme injustes.
-- Le générateur procédural doit garantir qu'un obstacle apparaît toujours dans un délai < `MAGIC_MAX * 0.6` : sans cette contrainte, le maintien du combo devient parfois impossible indépendamment du skill.
+## Decisions (history — do not revert)
+- **Magic gauge as a health bar -> abandoned.** It killed players who were clearing obstacles correctly. It is now the multiplier timer, nothing else. `FLICKER_GRACE` in its original role and death by drained magic are gone.
+- **x4 surge after crossing in the dark -> abandoned.** It rewarded deliberately stopping to graze (farming the return bonus). Replaced by `darkPointsSequence` + the visual beacon.
+- **Systematic pass-through points -> abandoned.** They diluted readability while the combo was active. Kept only in the dark, and decaying.
+- **Timer refill on leaving the zone -> abandoned** in favour of entry, which removed deaths perceived as unfair.
+- The procedural generator must guarantee that an obstacle always appears within `MAGIC.max * 0.6`: without that constraint, holding a combo sometimes becomes impossible regardless of skill.
 
 ## Internationalisation (IMPORTANT)
-Langues supportées : **English, Français, Español, Italiano**. Tout vit dans `src/i18n.ts`.
+Supported languages: **English, Français, Español, Italiano**. Everything lives in `src/i18n.ts`.
 
-- **Seule exception : le nom de marque « Moonwick »** (`BRAND.name`), identique dans les quatre langues.
-- **RÈGLE ABSOLUE : aucune autre chaîne littérale affichée dans les scènes.** Menu, réglages, écran de mort, écran de pause, tutoriel première partie, textes flottants, noms de paliers et image de partage passent *tous* par `t("clé")`. Les seuls littéraux tolérés dans les scènes sont les jetons techniques (`"sans-serif"`, `"bold"`, clés de scène, clés de texture).
-- Les noms de paliers ne sont pas des libellés mais des clés : `TIERS[i].nameKey` (`tier.edge`, `tier.darkwood`, `tier.brambles`, `tier.wall`, `tier.moonEye`).
-- L'anglais fait autorité pour les clés : `STRINGS.fr/es/it` sont typés sur lui, donc **une clé oubliée casse le build**.
-- `t(key, params)` interpole les `{paramètres}`. `tAll(key)` retourne les 4 traductions — utilisé pour dimensionner.
-- `setLanguage(lang)` persiste et notifie les abonnés (`onLanguageChange`) : les scènes se rafraîchissent **immédiatement, sans rechargement**. Toute scène qui affiche du texte doit s'abonner dans `create()` et se désabonner au `SHUTDOWN`.
-- Détection au premier lancement via `navigator.language` (partie primaire, repli `en`). **Le choix explicite de l'utilisateur prime définitivement.**
-- Réglages accessibles depuis l'accueil via l'icône engrenage : sélecteur de langue (noms natifs) + toggle son + bouton retour.
-- `DEBUG_FORCE_LANG` (config.ts) force une langue pour tester, sans toucher au navigateur ni au choix persisté.
+- **Only exception: the brand name "Moonwick"** (`BRAND.name`), identical in all four languages.
+- **ABSOLUTE RULE: no other literal display string in the scenes.** Menu, settings, death screen, pause screen, first-run onboarding, floating texts, tier names and the share image *all* go through `t("key")`. The only literals allowed in scenes are technical tokens (`"sans-serif"`, `"bold"`, scene keys, texture keys).
+- Tier names are keys, not labels: `TIERS[i].nameKey` (`tier.edge`, `tier.darkwood`, `tier.brambles`, `tier.wall`, `tier.moonEye`).
+- English is authoritative for keys: `STRINGS.fr/es/it` are typed against it, so **a forgotten key breaks the build**.
+- `t(key, params)` interpolates `{parameters}`. `tAll(key)` returns all 4 translations — used for sizing.
+- `setLanguage(lang)` persists and notifies subscribers (`onLanguageChange`): scenes refresh **immediately, with no reload**. Any scene displaying text must subscribe in `create()` and unsubscribe on `SHUTDOWN`.
+- Detection on first launch via `navigator.language` (primary subtag, falling back to `en`). **The player's explicit choice wins permanently.**
+- Settings reachable from the home screen via the gear icon: language selector (native names) + sound toggle + back button.
+- `DEBUG_FORCE_LANG` (config.ts) forces a language for testing, without touching the browser or the persisted choice.
 
-### Mise en page multilingue (plancher permanent)
-Les écarts de longueur atteignent **×2,3** (`Replay` → `Jugar de nuevo`). Donc :
-- un bouton se dimensionne sur la **plus longue des 4 traductions** (`buttonWidth()` dans `src/ui.ts`), jamais sur l'anglais ;
-- tout texte passe par `fitText()`, qui réduit la police s'il déborde de sa zone ;
-- l'image de partage applique la même contrainte (`fitFont()` dans `src/share.ts`) ;
-- toute nouvelle chaîne doit être vérifiée visuellement dans les 4 langues.
+### Multilingual layout (permanent floor)
+Length gaps reach **x2.3** (`Replay` -> `Jugar de nuevo`). Therefore:
+- a button is sized against the **longest of the 4 translations** (`buttonWidth()` in `src/ui.ts`), never against English;
+- every text goes through `fitText()`, which shrinks the font if it overflows its area;
+- the share image applies the same constraint (`fitFont()` in `src/share.ts`);
+- every new string must be checked visually in all 4 languages.
 
-## Persistance (localStorage)
-Toutes les clés sont préfixées `moonwick:` et gérées dans `src/save.ts` — jamais d'accès direct à `localStorage` ailleurs. Les anciennes clés `sorciere:` (avant le renommage de la marque) sont **migrées silencieusement** au chargement : recopiées puis supprimées, sans jamais écraser une valeur déjà présente. Un stockage indisponible (navigation privée, quota) est toléré : le jeu tourne sans persistance, sans jamais lever d'exception.
+## Persistence (localStorage)
+Every key is prefixed `moonwick:` and handled in `src/save.ts` — never touch `localStorage` directly anywhere else. Legacy `sorciere:` keys (from before the brand rename) are **migrated silently** on load: copied then removed, never overwriting a value already present. Unavailable storage (private browsing, quota) is tolerated: the game runs without persistence and never throws.
 
-| Clé | Contenu |
+| Key | Contents |
 | --- | --- |
-| `moonwick:bestScore` | Meilleur score, entier |
-| `moonwick:bestCombo` | Meilleur combo (nombre de frôlements enchaînés) |
-| `moonwick:bestTier` | Index dans `TIERS` du palier le plus loin atteint |
-| `moonwick:games` | Nombre de parties jouées |
-| `moonwick:sound` | `"1"` (défaut) / `"0"` — toggle du menu, persiste entre sessions |
-| `moonwick:tutorialDone` | `"1"` après le premier frôlement réussi ; masque l'apprentissage pour toujours |
-| `moonwick:lang` | `"en"` / `"fr"` / `"es"` / `"it"` — choix explicite dans les réglages, prime définitivement sur `navigator.language` |
+| `moonwick:bestScore` | Best score, integer |
+| `moonwick:bestCombo` | Best combo (number of chained grazes) |
+| `moonwick:bestTier` | Index in `TIERS` of the furthest tier reached |
+| `moonwick:games` | Number of games played |
+| `moonwick:sound` | `"1"` (default) / `"0"` — settings toggle, persists across sessions |
+| `moonwick:tutorialDone` | `"1"` after the first successful graze; hides onboarding forever |
+| `moonwick:lang` | `"en"` / `"fr"` / `"es"` / `"it"` — explicit choice in the settings, wins permanently over `navigator.language` |
 
-## Accessibilité et qualité (plancher permanent)
-- `prefers-reduced-motion` respecté pour le screen shake et le slow-motion.
-- Volume des sons bas par défaut, coupable depuis le menu (choix persistant).
-- Format portrait, une main, aucun texte indispensable à la compréhension.
-- Jeu jouable en 4 langues, sans débordement de texte sur aucun écran (voir Internationalisation).
-- Le restart reste **sous 300 ms** (remise à zéro en place, aucune scène rechargée) et le tap qui relance n'est jamais interprété comme un input de vol. Idem pour le tap qui reprend après une pause.
-- Aucune fuite entre les parties : obstacles, textes flottants, particules et tweens reviennent à l'identique après 20 parties consécutives.
+## Accessibility and quality (permanent floor)
+- `prefers-reduced-motion` honoured for screen shake and slow motion.
+- Sound volume low by default, mutable from the settings (choice persists).
+- Portrait format, one hand, no text required to understand the game.
+- Playable in 4 languages with no text overflow on any screen (see Internationalisation).
+- Restart stays **under 300 ms** (in-place reset, no scene reload) and the tap that restarts is never read as a flight input. Same for the tap that resumes after a pause.
+- No leaks between runs: obstacles, floating texts, particles and tweens return to identical counts after 20 consecutive runs.

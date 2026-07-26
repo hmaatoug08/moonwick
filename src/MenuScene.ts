@@ -6,11 +6,12 @@ import { ensureTextures, LIGHT_KEY, SPARK_KEY } from "./textures";
 import { buttonWidth, fitText } from "./ui";
 
 /**
- * Écran d'accueil : titre, meilleur score, « tape pour jouer » (plein écran),
- * et une icône engrenage qui ouvre les réglages (langue + son).
- * Le fond reprend le décor du jeu, avec une sorcière qui vole en boucle.
+ * Home screen: logo, best score, "tap to play" (the whole screen), and a gear
+ * icon that opens the settings (language + sound).
+ * The background reuses the in-game scenery, with a witch flying on a loop.
  *
- * Aucune chaîne littérale affichée ici : tout passe par i18n.
+ * No literal display string here: everything goes through i18n, except the
+ * brand name, which is never translated.
  */
 export class MenuScene extends Phaser.Scene {
   private demoWitch!: Phaser.GameObjects.Arc;
@@ -35,7 +36,7 @@ export class MenuScene extends Phaser.Scene {
   private backText!: Phaser.GameObjects.Text;
   private langRows: { lang: Lang; bg: Phaser.GameObjects.Rectangle }[] = [];
 
-  /** Largeurs figées, calculées sur la plus longue traduction des 4 langues. */
+  /** Fixed widths, computed from the longest of the 4 translations. */
   private widths: Record<string, number> = {};
 
   constructor() {
@@ -46,7 +47,7 @@ export class MenuScene extends Phaser.Scene {
     ensureTextures(this);
     const tier = TIERS[0];
 
-    // Décor : même ciel, même lune, mêmes poussières que le jeu.
+    // Scenery: same sky, same moon, same dust as the game.
     const sky = this.add.graphics();
     sky.fillGradientStyle(tier.skyTop, tier.skyTop, tier.skyBottom, tier.skyBottom, 1);
     sky.fillRect(0, 0, WORLD.width, WORLD.height);
@@ -67,7 +68,7 @@ export class MenuScene extends Phaser.Scene {
       })
       .setDepth(1);
 
-    // Sorcière de démonstration : traînée dorée de « belle partie ».
+    // Demo witch, with the golden trail of a great run.
     const trail = this.add.particles(0, 0, SPARK_KEY, {
       frequency: 14,
       lifespan: 520,
@@ -85,8 +86,8 @@ export class MenuScene extends Phaser.Scene {
 
     this.buildHome();
     this.buildSettings();
-    // Phaser réutilise l'instance de scène : l'état d'ouverture doit être
-    // remis à zéro ici, sinon il survivrait à un retour au menu.
+    // Phaser reuses the scene instance, so the open/closed state must be
+    // reset here, otherwise it would survive a return to the menu.
     this.settingsOpen = false;
     this.settingsPanel.setVisible(false);
     this.refreshTexts();
@@ -94,7 +95,7 @@ export class MenuScene extends Phaser.Scene {
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => this.onPointerDown(pointer));
 
-    // Rafraîchissement immédiat au changement de langue, sans rechargement.
+    // Immediate refresh when the language changes, with no reload.
     const unsubscribe = onLanguageChange(() => this.refreshTexts());
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, unsubscribe);
   }
@@ -102,7 +103,7 @@ export class MenuScene extends Phaser.Scene {
   private buildHome(): void {
     const cx = WORLD.width / 2;
 
-    // Lueur lunaire derrière le logo : respire très lentement, en additif.
+    // Moon glow behind the logo: breathes very slowly, additive blend.
     this.brandGlow = this.add
       .image(cx, 210, LIGHT_KEY)
       .setDisplaySize(BRAND.glowSize, BRAND.glowSize * 0.55)
@@ -119,8 +120,8 @@ export class MenuScene extends Phaser.Scene {
       ease: "Sine.easeInOut"
     });
 
-    // Le titre est un LOGO, pas du texte d'interface : marque non traduite,
-    // grande taille, interlettrage large. Il ne passe donc pas par i18n.
+    // The title is a LOGO, not interface text: untranslated brand, large size,
+    // wide letter-spacing. It therefore never goes through i18n.
     this.titleText = this.add
       .text(cx, 210, BRAND.name, {
         fontFamily: "sans-serif",
@@ -147,8 +148,8 @@ export class MenuScene extends Phaser.Scene {
       .setDepth(20);
     this.tweens.add({ targets: this.playText, alpha: 0.35, duration: 800, yoyo: true, repeat: -1 });
 
-    // Engrenage, en haut à gauche (la lune occupe la droite). Dessiné en
-    // vectoriel : pas d'asset, et rien à traduire.
+    // Gear icon, top left (the moon occupies the right). Drawn as vectors:
+    // no asset, and nothing to translate.
     const gear = this.add.graphics().setDepth(20);
     const gx = 40;
     const gy = 42;
@@ -161,14 +162,14 @@ export class MenuScene extends Phaser.Scene {
       gear.lineTo(gx + Math.cos(a) * 20, gy + Math.sin(a) * 20);
       gear.strokePath();
     }
-    // Cible tactile généreuse autour de l'icône.
+    // Generous touch target around the icon.
     this.gearZone = new Phaser.Geom.Rectangle(0, 0, 84, 86);
     this.gearIcon = gear;
   }
 
   /**
-   * L'accueil est masqué quand les réglages sont ouverts : un simple voile
-   * translucide laissait transparaître le titre derrière les libellés.
+   * The home screen is hidden while the settings are open: a plain translucent
+   * veil let the title show through behind the labels.
    */
   private setHomeVisible(on: boolean): void {
     this.titleText.setVisible(on);
@@ -197,8 +198,8 @@ export class MenuScene extends Phaser.Scene {
       this.langLabelText
     ];
 
-    // Sélecteur de langue : noms natifs, un par ligne, largeur commune
-    // dimensionnée sur le plus long des quatre.
+    // Language selector: native names, one per row, sharing a width sized
+    // against the longest of the four.
     const rowStyle = { fontFamily: "sans-serif", fontStyle: "bold", fontSize: "26px" };
     const probe = this.make.text({ style: rowStyle }, false);
     let rowWidth = 0;
@@ -232,7 +233,7 @@ export class MenuScene extends Phaser.Scene {
       children.push(bg, label);
     });
 
-    // Toggle son : libellé à gauche, valeur à droite, sur une zone tapable.
+    // Sound toggle: label on the left, value on the right, one tappable row.
     const soundY = firstY + LANGS.length * (rowH + gap) + 34;
     const soundW = WORLD.width - 96;
     const soundBg = this.add
@@ -251,7 +252,7 @@ export class MenuScene extends Phaser.Scene {
     this.soundZone = new Phaser.Geom.Rectangle(cx - soundW / 2, soundY - rowH / 2, soundW, rowH);
     children.push(soundBg, this.soundLabelText, this.soundValueText);
 
-    // Retour : bouton large en bas, atteignable au pouce.
+    // Back: wide button at the bottom, within thumb reach.
     const backStyle = { fontFamily: "sans-serif", fontStyle: "bold", fontSize: "30px" };
     const backW = buttonWidth(this, "settings.back", backStyle, 44, 200, WORLD.width - 64);
     this.widths.back = backW;
@@ -269,16 +270,16 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /**
-   * Tous les libellés sont (re)posés ici, puis ajustés à leur zone. Appelé au
-   * démarrage et à chaque changement de langue.
+   * Every label is (re)applied here, then fitted to its area. Called on start
+   * and on every language change.
    */
   private refreshTexts(): void {
     const stats = loadStats();
 
-    // Le titre n'est PAS rafraîchi ici : c'est une marque, pas une chaîne
-    // d'interface — elle ne change jamais avec la langue.
+    // The title is NOT refreshed here: it is a brand, not an interface string
+    // — it never changes with the language.
 
-    // Pas de « 0 » culpabilisant : le meilleur score n'apparaît qu'une fois établi.
+    // No guilt-inducing "0": the best score only appears once it exists.
     this.bestText.setVisible(stats.bestScore > 0);
     if (stats.bestScore > 0) {
       this.bestText.setText(t("menu.bestScore", { score: stats.bestScore }));
@@ -308,7 +309,7 @@ export class MenuScene extends Phaser.Scene {
     fitText(this.soundValueText, 120, 26);
   }
 
-  /** La langue active est surlignée. */
+  /** The active language row is highlighted. */
   private refreshLangSelection(): void {
     const active = getLanguage();
     for (const row of this.langRows) {
@@ -350,7 +351,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   update(time: number): void {
-    // Vol de démonstration : lissajous doux, boucle infinie.
+    // Demo flight: gentle Lissajous curve, looping forever.
     const t2 = time / 1000;
     this.demoWitch.x = WORLD.width * 0.5 + Math.sin(t2 * 0.9) * WORLD.width * 0.3;
     this.demoWitch.y = WORLD.height * 0.47 + Math.sin(t2 * 1.7) * 70;

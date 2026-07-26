@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { FEEDBACK, MAGIC, NEAR_MISS, OBSTACLES, WORLD } from "./config";
 
-/** Paramètres de difficulté du moment, interpolés entre paliers par la scène. */
+/** Current difficulty parameters, interpolated between tiers by the scene. */
 export type Difficulty = {
   speed: number;
   gapSize: number;
@@ -9,69 +9,68 @@ export type Difficulty = {
 };
 
 /**
- * Intervalle maximal entre deux obstacles, en secondes.
+ * Maximum interval between two obstacles, in seconds.
  *
- * CONTRAINTE D'ÉQUITÉ : chaque obstacle est la seule occasion de recharger le
- * minuteur de combo. Si deux obstacles sont trop espacés, le multiplicateur
- * saute alors même que le joueur joue parfaitement — une chaîne cassée sans
- * faute de sa part. Le plafond est appliqué à CHAQUE tirage d'intervalle,
- * quel que soit le palier : même en tunant TIERS n'importe comment, la
- * génération reste équitable. C'est volontairement une garantie structurelle
- * (doublée d'une assertion dev dans config.ts) pour que le tuning ne puisse
- * pas la casser.
+ * FAIRNESS CONSTRAINT: every obstacle is the only chance to refill the combo
+ * timer. If two obstacles are too far apart, the multiplier breaks even though
+ * the player is playing perfectly — a chain lost through no fault of theirs.
+ * The cap is applied to EVERY interval draw, whatever the tier: even with
+ * TIERS tuned arbitrarily, generation stays fair. This is deliberately a
+ * structural guarantee (backed by a dev assertion in config.ts) so that tuning
+ * cannot break it.
  */
 const MAX_INTERVAL = MAGIC.max * MAGIC.grazeWindowFactor;
 
-/** Applique la contrainte d'équité ci-dessus à un intervalle voulu. */
+/** Applies the fairness constraint above to a desired interval. */
 function clampInterval(interval: number): number {
   return Math.min(interval, MAX_INTERVAL);
 }
 
 /**
- * Profondeur des obstacles (halo compris) : AU-DESSUS de l'overlay
- * d'assombrissement (profondeur 2 côté scène), sous la sorcière (5).
- * INVARIANT de lisibilité : aucun effet visuel ne doit passer devant
- * les obstacles ou leurs halos de frôlement.
+ * Obstacle depth (halo included): ABOVE the darkening overlay (depth 2 on the
+ * scene side), below the witch (5).
+ * Readability INVARIANT: no visual effect may ever be drawn in front of
+ * obstacles or their graze halos.
  */
 const OBSTACLE_DEPTH = 3;
 
 export type ObstacleKind = "branch-top" | "branch-bottom" | "trunk";
 
 /**
- * Une partie d'obstacle : une barre à bout arrondi (capsule) d'axe vertical.
- * `tipAtBottom` dit de quel côté se trouve le bout arrondi, l'autre extrémité
- * étant toujours collée à un bord de l'écran.
+ * One part of an obstacle: a vertical bar with a rounded tip (a capsule).
+ * `tipAtBottom` says which end carries the rounded tip; the other end is
+ * always flush against a screen edge.
  */
 type Part = { top: number; bottom: number; tipAtBottom: boolean };
 
 /**
- * Formes de collision, en coordonnées locales au conteneur (x local = 0).
- * Elles épousent exactement le visuel : barre rectangulaire + bout arrondi.
+ * Collision shapes, in coordinates local to the container (local x = 0).
+ * They match the visuals exactly: rectangular bar + rounded tip.
  */
 export type CollisionShape =
   | { type: "rect"; halfWidth: number; top: number; bottom: number }
   | { type: "circle"; y: number; radius: number };
 
 /**
- * Un obstacle = un conteneur de formes qui défile d'un bloc.
- * `gapTop`/`gapBottom` décrivent la bande libre : c'est par là que la sorcière
- * doit passer (utilisé pour garantir un enchaînement jouable).
+ * An obstacle is a container of shapes that scrolls as one block.
+ * `gapTop`/`gapBottom` describe the free band: the witch is meant to fly
+ * through there (used to guarantee a playable sequence).
  */
 export class Obstacle {
-  /** Entrée dans la zone déjà signalée : la recharge n'a lieu qu'une fois. */
+  /** Zone entry already reported: the refill only happens once. */
   grazeEntered = false;
-  /** Frôlement déjà compté : un seul par obstacle, quoi qu'il arrive. */
+  /** Graze already counted: one per obstacle, whatever happens. */
   grazed = false;
-  /** Point de passage déjà compté. */
+  /** Pass-through already counted. */
   passed = false;
-  /** La sorcière est actuellement dans l'anneau de frôlement. */
+  /** The witch is currently inside the graze ring. */
   inGrazeZone = false;
-  /** Distance minimale atteinte, et position de la sorcière à ce moment-là :
-   *  c'est là que s'affiche le texte de frôlement. */
+  /** Closest distance reached, and the witch position at that moment: this is
+   *  where the graze text pops up. */
   minDistance = Infinity;
   grazeX = 0;
   grazeY = 0;
-  /** Dernier alpha de liseré appliqué (évite les setStrokeStyle redondants). */
+  /** Last outline alpha applied (avoids redundant setStrokeStyle calls). */
   private strokeAlpha = -1;
 
   constructor(
@@ -86,8 +85,8 @@ export class Obstacle {
   ) {}
 
   /**
-   * Contraste garanti : le liseré clair se renforce quand la lumière baisse,
-   * pour que l'obstacle reste parfaitement lisible à obscurité maximale.
+   * Guaranteed contrast: the bright outline strengthens as light fades, so the
+   * obstacle stays perfectly readable at maximum darkness.
    */
   setContrast(alpha: number): void {
     if (Math.abs(alpha - this.strokeAlpha) < 0.01) return;
@@ -102,9 +101,9 @@ export class Obstacle {
   }
 
   /**
-   * Distance de (px, py) à la SURFACE de l'obstacle, 0 = contact ou intérieur.
-   * Indispensable pour les longs troncs : une distance de centre à centre
-   * donnerait des frôlements complètement faux sur toute leur longueur.
+   * Distance from (px, py) to the obstacle SURFACE; 0 means contact or inside.
+   * Essential for long trunks: a centre-to-centre distance would produce
+   * completely wrong grazes along their whole length.
    */
   distanceTo(px: number, py: number): number {
     const dx = Math.abs(px - this.container.x);
@@ -126,36 +125,36 @@ export class Obstacle {
     return best;
   }
 
-  /** Passé derrière la sorcière : plus aucun contact possible (défilement à sens unique). */
+  /** Past the witch: no contact is possible any more (scrolling is one-way). */
   isBehind(witchX: number): boolean {
     return this.container.x + this.halfWidth < witchX;
   }
 }
 
-/** Catégorie tirée au sort ; le côté d'une branche est décidé ensuite. */
+/** Category drawn at random; a branch's side is decided afterwards. */
 type ObstacleCategory = "branch" | "trunk";
 
 /**
- * Générateur procédural : cadence temporelle pilotée par le palier courant.
+ * Procedural generator: time-based pacing driven by the current tier.
  */
 export class ObstacleSpawner {
   private readonly obstacles: Obstacle[] = [];
-  /** Cadence temporelle : le rythme de jeu ne dépend pas de la vitesse. */
+  /** Time-based pacing: the rhythm of play does not depend on speed. */
   private sinceSpawn = 0;
   private nextInterval: number = clampInterval(OBSTACLES.firstDelay);
-  /** Hauteur à laquelle la sorcière franchira le dernier obstacle généré. */
+  /** Height at which the witch will clear the last generated obstacle. */
   private passY = WORLD.height / 2;
   private lastCategory: ObstacleCategory | null = null;
   private sameCategoryStreak = 0;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
-  /** Obstacles vivants, du plus ancien au plus récent. */
+  /** Live obstacles, oldest first. */
   get all(): readonly Obstacle[] {
     return this.obstacles;
   }
 
-  /** Remise à zéro pour un restart instantané (aucune scène rechargée). */
+  /** Reset for an instant restart (no scene reload). */
   reset(): void {
     for (const obstacle of this.obstacles) obstacle.container.destroy();
     this.obstacles.length = 0;
@@ -170,7 +169,7 @@ export class ObstacleSpawner {
     this.sinceSpawn += dt;
     if (this.sinceSpawn >= this.nextInterval) {
       this.sinceSpawn -= this.nextInterval;
-      // Jitter autour de l'intervalle du palier, puis plafond d'équité.
+      // Jitter around the tier interval, then the fairness cap.
       const jitter = Phaser.Math.FloatBetween(1 - OBSTACLES.intervalJitter, 1 + OBSTACLES.intervalJitter);
       this.nextInterval = clampInterval(diff.spawnInterval * jitter);
       this.spawn(diff.gapSize);
@@ -202,12 +201,12 @@ export class ObstacleSpawner {
     let cap: number;
     let color: number;
 
-    // Une branche n'est resserrable que si sa bande peut être atteinte depuis
-    // la trajectoire courante (maxGapShift). Quand AUCUN côté ne le peut, on
-    // pose un tronc à la place : son trou se centre près de la trajectoire,
-    // donc il est toujours atteignable ET toujours à la largeur du palier.
-    // Sans ce repli, les branches « élargies par l'atteignabilité » seraient
-    // une échappatoire à la garantie « demi-passage < 38 px dès Les Ronces ».
+    // A branch can only be narrowed if its band is reachable from the current
+    // flight line (maxGapShift). When NEITHER side can be, we place a trunk
+    // instead: its hole centres near the flight line, so it is always both
+    // reachable AND at the tier's width.
+    // Without this fallback, branches "widened by reachability" would be an
+    // escape hatch from the "half-gap < 38 px from The Brambles" guarantee.
     let buildTrunk = category === "trunk";
     let lengthTop = 0;
     let lengthBottom = 0;
@@ -220,7 +219,7 @@ export class ObstacleSpawner {
         WORLD.height - Math.max(lengthTop, lengthBottom) - capB;
       if (bestBand > gapSize + OBSTACLES.branch.bandJitter + 1) {
         buildTrunk = true;
-        // Comptabilité de variété : c'est un tronc qui est réellement posé.
+        // Variety bookkeeping: a trunk is what actually gets placed.
         this.lastCategory = "trunk";
         this.sameCategoryStreak = 1;
       }
@@ -231,7 +230,7 @@ export class ObstacleSpawner {
       cap = OBSTACLES.trunk.width / 2;
       color = OBSTACLES.colors.trunkFill;
 
-      // Trou = gapSize du palier +/- jitter, jamais sous le plancher jouable.
+      // Hole = the tier's gapSize +/- jitter, never below the playable floor.
       const gapHeight = Math.max(
         OBSTACLES.gapFloor,
         gapSize + Phaser.Math.Between(-OBSTACLES.trunk.gapJitter, OBSTACLES.trunk.gapJitter)
@@ -245,16 +244,16 @@ export class ObstacleSpawner {
       gapTop = center - gapHeight / 2;
       gapBottom = center + gapHeight / 2;
 
-      // Les barres s'arrêtent avant le trou, les bourgeons arrondis viennent
-      // le fermer pile sur gapTop/gapBottom : le trou fait vraiment gapHeight.
+      // The bars stop short of the hole and the rounded tips close it exactly
+      // on gapTop/gapBottom: the hole really measures gapHeight.
       parts.push({ top: 0, bottom: gapTop - cap, tipAtBottom: true });
       parts.push({ top: gapBottom + cap, bottom: WORLD.height, tipAtBottom: false });
     } else {
       cap = OBSTACLES.branch.width / 2;
       color = OBSTACLES.colors.fill;
 
-      // Côté le plus étroit (les longueurs sont déjà bornées par
-      // l'atteignabilité ci-dessus), au hasard quand les deux se valent.
+      // Pick the narrower side (lengths are already bounded by reachability
+      // above), at random when both are equivalent.
       const bandTop = WORLD.height - lengthTop - cap;
       const bandBottom = WORLD.height - lengthBottom - cap;
       const slack = OBSTACLES.branch.sideSwitchSlack;
@@ -273,7 +272,7 @@ export class ObstacleSpawner {
       }
     }
 
-    // Halo d'abord : ajouté au conteneur avant les barres, donc rendu derrière.
+    // Halo first: added to the container before the bars, so it renders behind.
     const halo = this.scene.add.graphics().setAlpha(FEEDBACK.haloAlpha);
     container.add(halo);
     halo.fillStyle(FEEDBACK.haloColor, 1);
@@ -284,9 +283,9 @@ export class ObstacleSpawner {
       this.addTip(container, shapes, strokes, part.tipAtBottom ? part.bottom : part.top, cap, color);
     }
 
-    // Le joueur suit la trajectoire la plus courte : on mémorise où il passera.
-    // La marge de respiration se réduit d'elle-même quand le passage devient
-    // plus étroit qu'elle (paliers serrés), sinon les bornes se croiseraient.
+    // The player follows the shortest path, so we remember where they will
+    // cross. The breathing margin shrinks by itself when the gap gets narrower
+    // than the margin (tight tiers), otherwise the bounds would cross over.
     const clearance = Math.min(OBSTACLES.clearance, (gapBottom - gapTop) / 2 - 6);
     this.passY = Phaser.Math.Clamp(
       this.passY,
@@ -298,9 +297,9 @@ export class ObstacleSpawner {
   }
 
   /**
-   * Halo = la capsule de la partie, dilatée du rayon de frôlement.
-   * Sa bordure est donc exactement l'isoligne "d = grazeRadius" : le joueur
-   * voit littéralement la zone qui rapporte des points.
+   * The halo is the part's capsule, dilated by the graze radius.
+   * Its border is therefore exactly the "d = grazeRadius" isoline: the player
+   * literally sees the zone that scores points.
    */
   private addHalo(halo: Phaser.GameObjects.Graphics, part: Part, cap: number): void {
     const r = cap + NEAR_MISS.grazeRadius;
@@ -308,10 +307,9 @@ export class ObstacleSpawner {
   }
 
   /**
-   * Longueur d'une branche : sa bande libre vise gapSize x bandFactor
-   * (+/- jitter), et `reachable` — la position verticale la plus éloignée
-   * encore atteignable — la raccourcit si besoin pour ne jamais exiger un
-   * saut impossible.
+   * Branch length: its free band aims for gapSize x bandFactor (+/- jitter),
+   * and `reachable` — the furthest vertical position still attainable —
+   * shortens it when needed so an impossible dive is never demanded.
    */
   private branchLength(gapSize: number, reachable: number): number {
     const cap = OBSTACLES.branch.width / 2;
@@ -323,7 +321,7 @@ export class ObstacleSpawner {
     return Math.max(OBSTACLES.branch.lengthMin, Math.min(wanted, maxLength));
   }
 
-  /** Barre verticale entre deux hauteurs (placeholder géométrique). */
+  /** Vertical bar between two heights (geometric placeholder art). */
   private addBar(
     container: Phaser.GameObjects.Container,
     shapes: CollisionShape[],
@@ -342,7 +340,7 @@ export class ObstacleSpawner {
     strokes.push(bar);
   }
 
-  /** Extrémité arrondie d'une branche / bord d'un trou. */
+  /** Rounded end of a branch / edge of a hole. */
   private addTip(
     container: Phaser.GameObjects.Container,
     shapes: CollisionShape[],
@@ -363,8 +361,8 @@ export class ObstacleSpawner {
       ["branch", OBSTACLES.weights.branchTop + OBSTACLES.weights.branchBottom],
       ["trunk", OBSTACLES.weights.trunk]
     ];
-    // Jamais trois fois la même catégorie d'affilée : évite les patterns
-    // monotones (le côté d'une branche, lui, est dicté par le resserrement).
+    // Never three of the same category in a row: avoids monotonous patterns
+    // (a branch's side, on the other hand, is dictated by the narrowing).
     const pool =
       this.sameCategoryStreak >= 2 ? entries.filter(([k]) => k !== this.lastCategory) : entries;
 

@@ -2,19 +2,19 @@ import { SFX } from "./config";
 import { isSoundEnabled } from "./save";
 
 /**
- * Sons synthétisés à la volée : aucun fichier, aucun préchargement.
- * Deux sons seulement — un swoosh de frôlement dont la hauteur monte avec le
- * combo, et un impact grave à la mort.
+ * Sounds synthesised on the fly: no files, no preloading.
+ * Only two of them — a graze swoosh whose pitch rises with the combo, and a
+ * low impact on death.
  *
- * Le contexte audio ne peut démarrer qu'après un geste utilisateur : on
- * l'ouvre paresseusement au premier son et on le réveille à chaque tap.
+ * The audio context can only start after a user gesture, so we open it lazily
+ * on the first sound and wake it up on every tap.
  */
 export class Sfx {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private noise: AudioBuffer | null = null;
 
-  /** À appeler sur un vrai geste (pointerdown), sinon le navigateur refuse. */
+  /** Call on a real gesture (pointerdown), otherwise the browser refuses. */
   unlock(): void {
     const ctx = this.ensureContext();
     if (ctx && ctx.state === "suspended") void ctx.resume();
@@ -35,7 +35,7 @@ export class Sfx {
     return this.ctx;
   }
 
-  /** Bruit blanc d'une seconde, généré une fois et réutilisé. */
+  /** One second of white noise, generated once and reused. */
   private ensureNoise(ctx: AudioContext): AudioBuffer {
     if (this.noise) return this.noise;
     const buffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
@@ -46,8 +46,8 @@ export class Sfx {
   }
 
   /**
-   * Frôlement : souffle court et sec. La hauteur du filtre monte avec le
-   * combo, si bien qu'une longue chaîne s'entend monter en tension.
+   * Graze: a short, dry breath. The filter pitch rises with the combo, so a
+   * long chain can be heard building tension.
    */
   graze(combo: number): void {
     if (!isSoundEnabled()) return;
@@ -64,7 +64,7 @@ export class Sfx {
     const band = ctx.createBiquadFilter();
     band.type = "bandpass";
     band.Q.value = 6;
-    // Balayage vers le haut : c'est ce qui donne le « swoosh ».
+    // Upward sweep: this is what makes it read as a "swoosh".
     band.frequency.setValueAtTime(peak * 0.45, now);
     band.frequency.exponentialRampToValueAtTime(peak, now + duration);
 
@@ -78,7 +78,7 @@ export class Sfx {
     source.stop(now + duration + 0.02);
   }
 
-  /** Mort : impact grave qui descend, sans réverb ni traîne. */
+  /** Death: a low impact sliding down, no reverb, no tail. */
   death(): void {
     if (!isSoundEnabled()) return;
     const ctx = this.ensureContext();

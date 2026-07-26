@@ -2,14 +2,14 @@ import Phaser from "phaser";
 import { Params, StringKey, tAll } from "./i18n";
 
 /**
- * Outils de mise en page multilingue.
+ * Multilingual layout helpers.
  *
- * RÈGLE : un bouton ou une zone de texte se dimensionne sur la chaîne la plus
- * LONGUE des 4 langues (les écarts atteignent +30 %), jamais sur l'anglais.
- * Et si malgré tout un texte dépasse, `fitText` réduit sa police.
+ * RULE: a button or text area is sized against the LONGEST of the four
+ * translations (gaps reach +130%), never against English alone. And if a
+ * string still overflows, `fitText` shrinks its font until it fits.
  */
 
-/** Réduit la police jusqu'à ce que le texte tienne dans `maxWidth`. */
+/** Shrinks the font size until the text fits within `maxWidth`. */
 export function fitText(
   text: Phaser.GameObjects.Text,
   maxWidth: number,
@@ -25,8 +25,8 @@ export function fitText(
 }
 
 /**
- * Largeur, en pixels, de la plus longue traduction d'une clé — mesurée avec
- * le style réel, via un Text temporaire immédiatement détruit.
+ * Width, in pixels, of the longest translation of a key — measured with the
+ * real text style, using a temporary Text that is destroyed immediately.
  */
 export function widestTranslation(
   scene: Phaser.Scene,
@@ -45,8 +45,8 @@ export function widestTranslation(
 }
 
 /**
- * Largeur de bouton qui accueille la plus longue traduction dans toutes les
- * langues, marge intérieure comprise, sans dépasser `maxWidth`.
+ * Button width that fits the longest translation in every language, padding
+ * included, without exceeding `maxWidth`.
  */
 export function buttonWidth(
   scene: Phaser.Scene,

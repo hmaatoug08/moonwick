@@ -1,12 +1,12 @@
 import Phaser from "phaser";
 
-/** Textures générées au runtime, partagées entre scènes : aucun asset externe. */
+/** Textures generated at runtime, shared across scenes: no external assets. */
 export const LIGHT_KEY = "magic-light";
 export const LIGHT_SIZE = 256;
 export const SPARK_KEY = "trail-spark";
 const SPARK_SIZE = 32;
 
-/** Dégradé radial blanc -> transparent (halo de nuit, étincelle de traînée). */
+/** Radial gradient, white -> transparent (night light hole, trail spark). */
 function createRadialTexture(
   scene: Phaser.Scene,
   key: string,
@@ -29,7 +29,7 @@ function createRadialTexture(
   texture.refresh();
 }
 
-/** À appeler dans create() de toute scène qui utilise ces textures. */
+/** Call this from create() in any scene that uses these textures. */
 export function ensureTextures(scene: Phaser.Scene): void {
   createRadialTexture(scene, LIGHT_KEY, LIGHT_SIZE, 0.5, 0.92);
   createRadialTexture(scene, SPARK_KEY, SPARK_SIZE, 0.35, 0.75);

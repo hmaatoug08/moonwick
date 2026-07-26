@@ -2,7 +2,7 @@
   "name": "moonwick",
   "private": true,
   "version": "0.1.0",
-  "description": "Moonwick — jeu mobile near-miss : une sorcière sur balai charge sa magie en frôlant les obstacles.",
+  "description": "Moonwick — a mobile near-miss game: a witch on a broomstick charges her magic by grazing obstacles.",
   "type": "module",
   "scripts": {
     "dev": "vite",
