@@ -1,5 +1,17 @@
 import Phaser from "phaser";
-import { AMBIENT, BRAND, TIERS, TRAIL, WITCH, WORLD } from "./config";
+import {
+  AMBIENT,
+  BRAND,
+  FEEDBACK,
+  FULL_MOON,
+  OBSTACLE_ART,
+  TIERS,
+  TRAIL,
+  WITCH,
+  WORLD
+} from "./config";
+import { MOON_ON_RIGHT } from "./obstacleShapes";
+import { Witch } from "./witchShape";
 import { getLanguage, LANG_NAMES, LANGS, Lang, onLanguageChange, setLanguage, t } from "./i18n";
 import { isSoundEnabled, loadStats, setSoundEnabled } from "./save";
 import { ensureTextures, LIGHT_KEY, SPARK_KEY } from "./textures";
@@ -14,7 +26,7 @@ import { buttonWidth, fitText } from "./ui";
  * brand name, which is never translated.
  */
 export class MenuScene extends Phaser.Scene {
-  private demoWitch!: Phaser.GameObjects.Arc;
+  private demoWitch!: Witch;
 
   private titleText!: Phaser.GameObjects.Text;
   private brandGlow!: Phaser.GameObjects.Image;
@@ -27,7 +39,17 @@ export class MenuScene extends Phaser.Scene {
   private gearZone!: Phaser.Geom.Rectangle;
   private backZone!: Phaser.Geom.Rectangle;
   private soundZone!: Phaser.Geom.Rectangle;
+  private howToZone!: Phaser.Geom.Rectangle;
   private langZones: { lang: Lang; zone: Phaser.Geom.Rectangle }[] = [];
+
+  /** "How to play" page: reachable only from the settings, never automatic. */
+  private helpPanel!: Phaser.GameObjects.Container;
+  private helpOpen = false;
+  private helpBackZone!: Phaser.Geom.Rectangle;
+  private helpTitleText!: Phaser.GameObjects.Text;
+  private helpBackText!: Phaser.GameObjects.Text;
+  private helpCaptions: Phaser.GameObjects.Text[] = [];
+  private howToText!: Phaser.GameObjects.Text;
 
   private settingsTitleText!: Phaser.GameObjects.Text;
   private langLabelText!: Phaser.GameObjects.Text;
@@ -80,16 +102,18 @@ export class MenuScene extends Phaser.Scene {
       blendMode: Phaser.BlendModes.ADD
     });
     trail.setDepth(4);
-    this.demoWitch = this.add.circle(0, 0, WITCH.radius, 0xd9a7ff).setDepth(5);
-    this.demoWitch.setStrokeStyle(2, 0xffffff, 0.6);
-    trail.startFollow(this.demoWitch, TRAIL.offsetX, 0);
+    this.demoWitch = new Witch(this, WORLD.width * 0.5, WORLD.height * 0.47, 5);
+    trail.startFollow(this.demoWitch.follow, TRAIL.offsetX, 0);
 
     this.buildHome();
     this.buildSettings();
+    this.buildHelp();
     // Phaser reuses the scene instance, so the open/closed state must be
     // reset here, otherwise it would survive a return to the menu.
     this.settingsOpen = false;
     this.settingsPanel.setVisible(false);
+    this.helpOpen = false;
+    this.helpPanel.setVisible(false);
     this.refreshTexts();
     this.setHomeVisible(true);
 
@@ -252,6 +276,28 @@ export class MenuScene extends Phaser.Scene {
     this.soundZone = new Phaser.Geom.Rectangle(cx - soundW / 2, soundY - rowH / 2, soundW, rowH);
     children.push(soundBg, this.soundLabelText, this.soundValueText);
 
+    // "How to play": opens the help page. Nothing shows it automatically.
+    // Sits between the sound row and the Back button, touching neither: their
+    // hit zones must not overlap, since this one is tested first.
+    const howToStyle = { fontFamily: "sans-serif", fontStyle: "bold", fontSize: "24px" };
+    const howToH = 52;
+    const howToY = 670;
+    const howToW = buttonWidth(this, "settings.howToPlay", howToStyle, 34, 220, WORLD.width - 64);
+    this.widths.howTo = howToW;
+    const howToBg = this.add
+      .rectangle(cx, howToY, howToW, howToH, 0xffffff, 0.06)
+      .setStrokeStyle(2, 0x9b6bff, 0.5);
+    this.howToText = this.add
+      .text(cx, howToY, "", { ...howToStyle, color: "#d9a7ff" })
+      .setOrigin(0.5);
+    this.howToZone = new Phaser.Geom.Rectangle(
+      cx - howToW / 2,
+      howToY - howToH / 2,
+      howToW,
+      howToH
+    );
+    children.push(howToBg, this.howToText);
+
     // Back: wide button at the bottom, within thumb reach.
     const backStyle = { fontFamily: "sans-serif", fontStyle: "bold", fontSize: "30px" };
     const backW = buttonWidth(this, "settings.back", backStyle, 44, 200, WORLD.width - 64);
@@ -267,6 +313,115 @@ export class MenuScene extends Phaser.Scene {
     children.push(backBg, this.backText);
 
     this.settingsPanel = this.add.container(0, 0, children).setDepth(30).setVisible(false);
+  }
+
+  /**
+   * "How to play": three pictograms explaining the whole game — graze scores,
+   * touching kills, chaining multiplies. Drawn as vectors, so there is no
+   * asset and nothing to translate in the drawings themselves.
+   * Only ever opened from the settings.
+   */
+  private buildHelp(): void {
+    const cx = WORLD.width / 2;
+    const veil = this.add
+      .rectangle(0, 0, WORLD.width, WORLD.height, 0x05030c, 0.94)
+      .setOrigin(0, 0);
+
+    this.helpTitleText = this.add
+      .text(cx, 140, "", { fontFamily: "sans-serif", fontStyle: "bold", color: "#f5efd8" })
+      .setOrigin(0.5);
+
+    const children: Phaser.GameObjects.GameObject[] = [veil, this.helpTitleText];
+
+    const iconX = 96;
+    const textX = 156;
+    const rowsY = [268, 418, 568];
+    const art = this.add.graphics();
+    children.push(art);
+
+    this.helpCaptions = rowsY.map((y) => {
+      const caption = this.add
+        .text(textX, y, "", {
+          fontFamily: "sans-serif",
+          fontSize: "20px",
+          color: "#d9a7ff",
+          wordWrap: { width: WORLD.width - textX - 32 }
+        })
+        .setOrigin(0, 0.5);
+      children.push(caption);
+      return caption;
+    });
+
+    this.drawHelpArt(art, iconX, rowsY);
+
+    // Back button, same shape and place as in the settings.
+    const backStyle = { fontFamily: "sans-serif", fontStyle: "bold", fontSize: "30px" };
+    const backW = buttonWidth(this, "settings.back", backStyle, 44, 200, WORLD.width - 64);
+    this.widths.helpBack = backW;
+    const backY = WORLD.height - 110;
+    const backBg = this.add
+      .rectangle(cx, backY, backW, 74, 0x9b6bff, 0.16)
+      .setStrokeStyle(2, 0x9b6bff, 0.6);
+    this.helpBackText = this.add.text(cx, backY, "", { ...backStyle, color: "#f2c8ff" }).setOrigin(0.5);
+    this.helpBackZone = new Phaser.Geom.Rectangle(cx - backW / 2, backY - 37, backW, 74);
+    children.push(backBg, this.helpBackText);
+
+    this.helpPanel = this.add.container(0, 0, children).setDepth(31).setVisible(false);
+  }
+
+  /** The three pictograms, using the game's own visual vocabulary. */
+  private drawHelpArt(art: Phaser.GameObjects.Graphics, x: number, rowsY: number[]): void {
+    const barW = 14;
+    const barH = 92;
+
+    /**
+     * Same vocabulary as the real obstacles: near-black body, and a moon rim on
+     * one side only — never an outline all the way round. If the pictogram and
+     * the game disagree, the pictogram is teaching the wrong thing.
+     */
+    const obstacle = (y: number) => {
+      const side = MOON_ON_RIGHT ? 1 : -1;
+      art.fillStyle(OBSTACLE_ART.bodyColor, 1);
+      art.fillRoundedRect(x - barW / 2, y - barH / 2, barW, barH, barW / 2);
+      art.lineStyle(2, OBSTACLE_ART.rimColor, 0.9);
+      art.beginPath();
+      art.moveTo(x + (side * barW) / 2, y - barH / 2 + barW / 2);
+      art.lineTo(x + (side * barW) / 2, y + barH / 2 - barW / 2);
+      art.strokePath();
+    };
+
+    // 1) Graze scores: the witch passes inside the halo, not touching it.
+    let y = rowsY[0];
+    art.fillStyle(FEEDBACK.haloColor, 0.28);
+    art.fillRoundedRect(x - barW / 2 - 24, y - barH / 2 - 24, barW + 48, barH + 48, 24);
+    obstacle(y);
+    art.fillStyle(FULL_MOON.witchColorNormal, 1);
+    art.fillCircle(x - 30, y, WITCH.radius);
+
+    // 2) Touching kills: the witch is on the bar, struck through.
+    y = rowsY[1];
+    obstacle(y);
+    art.fillStyle(FULL_MOON.witchColorNormal, 1);
+    art.fillCircle(x, y, WITCH.radius);
+    art.lineStyle(4, 0xff6b6b, 0.95);
+    art.beginPath();
+    art.moveTo(x - 26, y - 26);
+    art.lineTo(x + 26, y + 26);
+    art.moveTo(x + 26, y - 26);
+    art.lineTo(x - 26, y + 26);
+    art.strokePath();
+
+    // 3) Chaining multiplies: three grazes, brighter and bigger each time.
+    y = rowsY[2];
+    const steps = [
+      { dx: -34, radius: 5, color: TRAIL.colorIdle, alpha: 0.5 },
+      { dx: 0, radius: 8, color: 0xc79bff, alpha: 0.75 },
+      { dx: 34, radius: 12, color: TRAIL.colorMax, alpha: 1 }
+    ];
+    for (const step of steps) {
+      art.fillStyle(step.color, step.alpha);
+      art.fillCircle(x + step.dx, y, step.radius);
+    }
   }
 
   /**
@@ -301,6 +456,21 @@ export class MenuScene extends Phaser.Scene {
     this.backText.setText(t("settings.back"));
     fitText(this.backText, this.widths.back - 36, 30);
 
+    this.howToText.setText(t("settings.howToPlay"));
+    fitText(this.howToText, this.widths.howTo - 28, 24);
+
+    this.helpTitleText.setText(t("settings.howToPlay"));
+    fitText(this.helpTitleText, WORLD.width - 48, 40);
+    this.helpBackText.setText(t("settings.back"));
+    fitText(this.helpBackText, this.widths.helpBack - 36, 30);
+
+    const helpKeys = ["help.graze", "help.touch", "help.combo"] as const;
+    helpKeys.forEach((key, index) => {
+      const caption = this.helpCaptions[index];
+      // Wrapped rather than shrunk: these are full sentences, not labels.
+      caption.setFontSize(20).setText(t(key));
+    });
+
     this.refreshLangSelection();
   }
 
@@ -320,6 +490,17 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
+    // Help sits on top of the settings, so it is tested first.
+    if (this.helpOpen) {
+      if (this.helpBackZone.contains(pointer.x, pointer.y)) {
+        this.helpOpen = false;
+        this.helpPanel.setVisible(false);
+        // Back to the settings, which were left open behind the help page.
+        this.settingsPanel.setVisible(this.settingsOpen);
+      }
+      return;
+    }
+
     if (this.settingsOpen) {
       for (const { lang, zone } of this.langZones) {
         if (zone.contains(pointer.x, pointer.y)) {
@@ -331,6 +512,14 @@ export class MenuScene extends Phaser.Scene {
       if (this.soundZone.contains(pointer.x, pointer.y)) {
         setSoundEnabled(!isSoundEnabled());
         this.refreshSoundValue();
+        return;
+      }
+      if (this.howToZone.contains(pointer.x, pointer.y)) {
+        this.helpOpen = true;
+        this.helpPanel.setVisible(true);
+        // The settings stay open underneath, but hidden: a translucent veil
+        // alone let their labels show through the help page.
+        this.settingsPanel.setVisible(false);
         return;
       }
       if (this.backZone.contains(pointer.x, pointer.y)) {
@@ -350,10 +539,15 @@ export class MenuScene extends Phaser.Scene {
     this.scene.start("flight");
   }
 
-  update(time: number): void {
+  update(time: number, deltaMs: number): void {
     // Demo flight: gentle Lissajous curve, looping forever.
     const t2 = time / 1000;
+    const dt = deltaMs / 1000;
+    const y = WORLD.height * 0.47 + Math.sin(t2 * 1.7) * 70;
+    // Her own vertical speed drives the tilt, so she banks through the loop.
+    const vy = (y - this.demoWitch.y) / Math.max(dt, 1 / 240);
     this.demoWitch.x = WORLD.width * 0.5 + Math.sin(t2 * 0.9) * WORLD.width * 0.3;
-    this.demoWitch.y = WORLD.height * 0.47 + Math.sin(t2 * 1.7) * 70;
+    this.demoWitch.y = y;
+    this.demoWitch.update(dt, vy, WITCH.maxSpeed, 0);
   }
 }

@@ -1,39 +1,46 @@
 import Phaser from "phaser";
 import {
   AMBIENT,
+  DEATH_MESSAGE,
   DEBUG_HITBOX,
   DEBUG_START_TIER,
   DEBUG_STATS,
   FEEDBACK,
   FULL_MOON,
+  HISTORY,
   MAGIC,
+  MOON,
+  MOON_EYE,
   NEAR_MISS,
-  OBSTACLES,
-  RESTART,
+  OBSTACLE_ART,
   SCORING,
   SHAKE,
   SLOWMO,
   TEACH,
   TIER_FX,
   TIERS,
+  tierSky,
   TRAIL,
   WITCH,
   WORLD
 } from "./config";
-import { onLanguageChange, t } from "./i18n";
+import { DeathCategory, deathMessage, onLanguageChange, t } from "./i18n";
 import { Difficulty, Obstacle, ObstacleSpawner } from "./obstacles";
 import { isTutorialDone, markTutorialDone, recordRun } from "./save";
 import { shareScoreImage } from "./share";
 import { Sfx } from "./sfx";
 import { ensureTextures, LIGHT_KEY, LIGHT_SIZE, SPARK_KEY } from "./textures";
 import { buttonWidth, fitText } from "./ui";
+import { Witch } from "./witchShape";
 
 /** Current interpolated parameters: difficulty + sky mood. */
 type TierParams = Difficulty & { skyTop: number; skyBottom: number };
 
-const MOON_X = WORLD.width - 70;
-const MOON_Y = 90;
 const MOON_COLOR = 0xf5efd8;
+
+// HUD colours for the normal (dark) palette; MOON_EYE holds the inverted ones.
+const HUD_SCORE_COLOR = "#f5efd8";
+const HUD_MULT_COLOR = "#d9a7ff";
 
 /** Free band where the death-screen witch roams (above all the text). */
 const DEATH_WITCH_Y = 168;
@@ -58,7 +65,7 @@ const DEPTH_DARKNESS = 2;
  * You only die by touching an obstacle.
  */
 export class FlightScene extends Phaser.Scene {
-  private witch!: Phaser.GameObjects.Arc;
+  private witch!: Witch;
   private velocityY = 0;
   private holding = false;
   /** false = the finger currently down does not steer (it was a replay tap). */
@@ -74,7 +81,10 @@ export class FlightScene extends Phaser.Scene {
   /** Flicker wave phase; advances for as long as we are flickering. */
   private flickerPhase = 0;
   private dead = false;
-  private deathAt = 0;
+  /** Which contextual sentence the death screen is currently showing. */
+  private deathCategory: DeathCategory = "default";
+  /** Seconds actually flown this run (unaffected by DEBUG_START_TIER). */
+  private runDuration = 0;
 
   /** Elapsed play time (s) — drives the tiers. Frozen on death. */
   private runTime = 0;
@@ -96,8 +106,10 @@ export class FlightScene extends Phaser.Scene {
   private ambient!: Phaser.GameObjects.Particles.ParticleEmitter;
   /** Key of the last mood state applied (avoids pointless redraws). */
   private lastAmbianceKey = "";
+  /** Current HUD polarity, so colours are only reassigned when it flips. */
+  private hudInverted = false;
   /** Current obstacle outline alpha (rises as the light fades). */
-  private obstacleStrokeAlpha: number = OBSTACLES.colors.strokeAlphaLit;
+  private obstacleStrokeAlpha: number = OBSTACLE_ART.rimAlphaLit;
   private sky!: Phaser.GameObjects.Graphics;
   private tierText!: Phaser.GameObjects.Text;
   private moon!: Phaser.GameObjects.Arc;
@@ -115,7 +127,9 @@ export class FlightScene extends Phaser.Scene {
   private deathScoreText!: Phaser.GameObjects.Text;
   private deathCauseText!: Phaser.GameObjects.Text;
   private deathStatsText!: Phaser.GameObjects.Text;
-  private recordText!: Phaser.GameObjects.Text;
+  private messageText!: Phaser.GameObjects.Text;
+  private historyBars!: Phaser.GameObjects.Graphics;
+  private historyLabels: Phaser.GameObjects.Text[] = [];
   private shareLabel!: Phaser.GameObjects.Text;
   private homeLabel!: Phaser.GameObjects.Text;
   private replayLabel!: Phaser.GameObjects.Text;
@@ -126,8 +140,8 @@ export class FlightScene extends Phaser.Scene {
   private homeZone!: Phaser.Geom.Rectangle;
 
   /** Animated death-screen scenery: same spirit as the home screen. */
-  private deathScene: Phaser.GameObjects.GameObject[] = [];
-  private deathWitch!: Phaser.GameObjects.Arc;
+  private deathScene: Array<{ setVisible(v: boolean): void }> = [];
+  private deathWitch!: Witch;
   private deathDust!: Phaser.GameObjects.Particles.ParticleEmitter;
   private deathTrail!: Phaser.GameObjects.Particles.ParticleEmitter;
   /** Best combo reached in the current run. */
@@ -182,10 +196,10 @@ export class FlightScene extends Phaser.Scene {
 
     // Moon + its Full Moon halo (invisible until the multiplier hits the cap).
     this.moonGlow = this.add
-      .circle(MOON_X, MOON_Y, FULL_MOON.glowRadius, FULL_MOON.glowColor, 1)
+      .circle(MOON.x, MOON.y, FULL_MOON.glowRadius, FULL_MOON.glowColor, 1)
       .setAlpha(0)
       .setBlendMode(Phaser.BlendModes.ADD);
-    this.moon = this.add.circle(MOON_X, MOON_Y, 34, MOON_COLOR, 0.9);
+    this.moon = this.add.circle(MOON.x, MOON.y, 34, MOON_COLOR, 0.9);
 
     ensureTextures(this);
 
@@ -219,11 +233,10 @@ export class FlightScene extends Phaser.Scene {
     });
     this.trailEmitter.setDepth(4);
 
-    // The witch (placeholder: an orb). The visual is larger than the hitbox.
-    this.witch = this.add.circle(WITCH.x, WORLD.height / 2, WITCH.radius, FULL_MOON.witchColorNormal);
-    this.witch.setStrokeStyle(2, 0xffffff, 0.6);
-    this.witch.setDepth(5);
-    this.trailEmitter.startFollow(this.witch, TRAIL.offsetX, 0);
+    // The witch. `witch.x/y` is her TORSO — the very point the lethal circle
+    // is centred on, so art and collision cannot drift apart.
+    this.witch = new Witch(this, WITCH.x, WORLD.height / 2, 5);
+    this.trailEmitter.startFollow(this.witch.follow, TRAIL.offsetX, 0);
 
     this.spawner = new ObstacleSpawner(this);
 
@@ -312,7 +325,7 @@ export class FlightScene extends Phaser.Scene {
         fontFamily: "sans-serif",
         fontStyle: "bold",
         fontSize: "64px",
-        color: "#f5efd8"
+        color: HUD_SCORE_COLOR
       })
       .setOrigin(0.5, 0)
       .setDepth(20);
@@ -322,7 +335,7 @@ export class FlightScene extends Phaser.Scene {
         fontFamily: "sans-serif",
         fontStyle: "bold",
         fontSize: "26px",
-        color: "#d9a7ff"
+        color: HUD_MULT_COLOR
       })
       .setOrigin(0.5, 0)
       .setDepth(20);
@@ -361,13 +374,13 @@ export class FlightScene extends Phaser.Scene {
 
     // Soft glow: the radial texture, not a solid circle (ugly hard edge).
     const glow = this.add
-      .image(MOON_X, MOON_Y, LIGHT_KEY)
+      .image(MOON.x, MOON.y, LIGHT_KEY)
       .setDisplaySize(340, 340)
       .setTint(FULL_MOON.glowColor)
       .setAlpha(0.3)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(28);
-    const moon = this.add.circle(MOON_X, MOON_Y, 34, MOON_COLOR, 0.9).setDepth(28);
+    const moon = this.add.circle(MOON.x, MOON.y, 34, MOON_COLOR, 0.9).setDepth(28);
 
     this.deathDust = this.add
       .particles(0, 0, SPARK_KEY, {
@@ -398,20 +411,15 @@ export class FlightScene extends Phaser.Scene {
       })
       .setDepth(29);
 
-    this.deathWitch = this.add
-      .circle(WORLD.width / 2, DEATH_WITCH_Y, WITCH.radius, FULL_MOON.witchColorNormal)
-      .setDepth(29);
-    this.deathWitch.setStrokeStyle(2, 0xffffff, 0.6);
-    this.deathTrail.startFollow(this.deathWitch, TRAIL.offsetX, 0);
+    this.deathWitch = new Witch(this, WORLD.width / 2, DEATH_WITCH_Y, 29);
+    this.deathTrail.startFollow(this.deathWitch.follow, TRAIL.offsetX, 0);
 
     this.deathScene = [sky, glow, moon, this.deathDust, this.deathTrail, this.deathWitch];
     this.setDeathSceneVisible(false);
   }
 
   private setDeathSceneVisible(on: boolean): void {
-    for (const object of this.deathScene) {
-      (object as unknown as { setVisible(v: boolean): void }).setVisible(on);
-    }
+    for (const object of this.deathScene) object.setVisible(on);
     // The emitters only run while the screen is showing.
     if (on) {
       this.deathDust.start();
@@ -425,10 +433,14 @@ export class FlightScene extends Phaser.Scene {
   }
 
   /** The death-screen witch roams inside the free band at the top. */
-  private updateDeathScene(time: number): void {
+  private updateDeathScene(time: number, dt: number): void {
     const t = time / 1000;
+    const y = DEATH_WITCH_Y + Math.sin(t * 1.6) * 26;
+    // Her own vertical speed drives the tilt, so she banks through the loop.
+    const vy = (y - this.deathWitch.y) / Math.max(dt, 1 / 240);
     this.deathWitch.x = WORLD.width * 0.5 + Math.sin(t * 0.75) * WORLD.width * 0.34;
-    this.deathWitch.y = DEATH_WITCH_Y + Math.sin(t * 1.6) * 26;
+    this.deathWitch.y = y;
+    this.deathWitch.update(dt, vy, WITCH.maxSpeed, 0);
   }
 
   private buildDeathPanel(): void {
@@ -437,12 +449,16 @@ export class FlightScene extends Phaser.Scene {
     // Light veil: the animated scenery stays visible beneath, text stays crisp.
     const veil = this.add.rectangle(0, 0, WORLD.width, WORLD.height, 0x05030c, 0.34).setOrigin(0, 0);
 
-    this.recordText = this.add
-      .text(cx, 236, "", {
+    // Contextual game-over line. Word-wrapped rather than shrunk, so a long
+    // sentence in any language stays readable instead of turning tiny.
+    this.messageText = this.add
+      .text(cx, 232, "", {
         fontFamily: "sans-serif",
         fontStyle: "bold",
-        fontSize: "28px",
-        color: "#ffd27a"
+        fontSize: "22px",
+        color: "#d9a7ff",
+        align: "center",
+        wordWrap: { width: WORLD.width - 64 }
       })
       .setOrigin(0.5);
 
@@ -474,6 +490,22 @@ export class FlightScene extends Phaser.Scene {
         lineSpacing: 8
       })
       .setOrigin(0.5);
+
+    // Score history: a mini bar chart, oldest left, this run right. Bars are
+    // redrawn on each death; the labels are created once and reused.
+    this.historyBars = this.add.graphics();
+    this.historyLabels = [];
+    for (let i = 0; i < HISTORY.size; i++) {
+      this.historyLabels.push(
+        this.add
+          .text(0, HISTORY.baselineY + 8, "", {
+            fontFamily: "sans-serif",
+            fontSize: "12px",
+            color: HISTORY.labelColor
+          })
+          .setOrigin(0.5, 0)
+      );
+    }
 
     // Two secondary buttons side by side, above the thumb zone.
     // Shared width sized against the longest translation of BOTH labels across
@@ -525,10 +557,12 @@ export class FlightScene extends Phaser.Scene {
     this.deathPanel = this.add
       .container(0, 0, [
         veil,
-        this.recordText,
+        this.messageText,
         this.deathScoreText,
         this.deathCauseText,
         this.deathStatsText,
+        this.historyBars,
+        ...this.historyLabels,
         shareBg,
         this.shareLabel,
         homeBg,
@@ -617,8 +651,18 @@ export class FlightScene extends Phaser.Scene {
     this.deathScoreText.setText(String(this.score));
     fitText(this.deathScoreText, WORLD.width - 48, 96);
 
-    this.recordText.setText(t("death.newRecord"));
-    fitText(this.recordText, WORLD.width - 48, 28);
+    // The message is re-rolled on a language change: same category, a fresh
+    // variant in the new language. Never rebuilt from fragments.
+    this.messageText.setText(
+      deathMessage(this.deathCategory, {
+        score: this.score,
+        combo: this.bestComboThisRun,
+        tier: t(TIERS[this.bestTierThisRun].nameKey)
+      })
+    );
+    this.messageText.setColor(
+      this.deathCategory === "newRecord" ? HISTORY.recordLabelColor : "#d9a7ff"
+    );
 
     this.deathCauseText.setText(t("death.causeBranch"));
     fitText(this.deathCauseText, WORLD.width - 48, 20);
@@ -641,7 +685,8 @@ export class FlightScene extends Phaser.Scene {
     }
 
     if (this.dead) {
-      if (this.time.now - this.deathAt < RESTART.minDeathMs) return;
+      // No delay guard: the tap is live from the very first frame of the
+      // death screen. The message and the history never gate replaying.
       // Only "Share" and "Home" divert the tap; everywhere else restarts, so
       // the urge to replay never runs into a dead zone.
       if (this.shareZone.contains(pointer.x, pointer.y)) {
@@ -667,9 +712,7 @@ export class FlightScene extends Phaser.Scene {
     this.spawner.reset();
     this.trailEmitter.killAll();
 
-    this.witch.setPosition(WITCH.x, WORLD.height / 2);
-    this.witch.setScale(1, 1);
-    this.witch.setAlpha(1);
+    this.witch.reset(WITCH.x, WORLD.height / 2);
     this.velocityY = 0;
     this.holding = false;
 
@@ -684,6 +727,7 @@ export class FlightScene extends Phaser.Scene {
     this.darkStreak = 0;
     this.bestComboThisRun = 0;
     this.bestTierThisRun = 0;
+    this.runDuration = 0;
     this.magic = MAGIC.max;
     this.flickerPhase = 0;
     this.slowMoLeft = 0;
@@ -757,12 +801,15 @@ export class FlightScene extends Phaser.Scene {
 
   private tierParams(index: number): TierParams {
     const tier = TIERS[index];
+    const sky = tierSky(tier);
     return {
       speed: tier.scrollSpeed,
       gapSize: tier.gapSize,
       spawnInterval: tier.spawnInterval,
-      skyTop: tier.skyTop,
-      skyBottom: tier.skyBottom
+      essence: tier.essence,
+      inverted: MOON_EYE.enabled && tier.invertContrast === true,
+      skyTop: sky.top,
+      skyBottom: sky.bottom
     };
   }
 
@@ -783,6 +830,7 @@ export class FlightScene extends Phaser.Scene {
    */
   private updateDifficulty(dt: number): void {
     this.runTime += dt;
+    this.runDuration += dt;
 
     const target = this.tierIndexFor(this.runTime);
     this.bestTierThisRun = Math.max(this.bestTierThisRun, target);
@@ -801,6 +849,11 @@ export class FlightScene extends Phaser.Scene {
         speed: Phaser.Math.Linear(this.diffFrom.speed, to.speed, k),
         gapSize: Phaser.Math.Linear(this.diffFrom.gapSize, to.gapSize, k),
         spawnInterval: Phaser.Math.Linear(this.diffFrom.spawnInterval, to.spawnInterval, k),
+        // Species does not interpolate: obstacles already on screen keep the
+        // one they spawned with, so the changeover rolls in as new trees
+        // arrive rather than restyling the forest in place.
+        essence: to.essence,
+        inverted: to.inverted,
         skyTop: lerpColor(this.diffFrom.skyTop, to.skyTop, k),
         skyBottom: lerpColor(this.diffFrom.skyBottom, to.skyBottom, k)
       };
@@ -822,6 +875,16 @@ export class FlightScene extends Phaser.Scene {
     if (!force && key === this.lastAmbianceKey) return;
     this.lastAmbianceKey = key;
 
+    // HUD polarity follows the background: light-on-dark normally, dark-on-light
+    // under the contrast inversion, where the default cream score would sit
+    // almost invisibly on pale gold.
+    if (this.diffCurrent.inverted !== this.hudInverted) {
+      this.hudInverted = this.diffCurrent.inverted;
+      this.scoreText.setColor(this.hudInverted ? MOON_EYE.scoreColor : HUD_SCORE_COLOR);
+      this.multiplierText.setColor(this.hudInverted ? MOON_EYE.multiplierColor : HUD_MULT_COLOR);
+      this.magicFill.setFillStyle(this.hudInverted ? MOON_EYE.magicBarColor : MAGIC.barColor, 0.9);
+    }
+
     // Cooled and desaturated sky.
     this.sky.clear();
     const top = coolDesat(this.diffCurrent.skyTop, cold);
@@ -840,11 +903,11 @@ export class FlightScene extends Phaser.Scene {
     });
     this.ambient.setParticleTint(lerpColor(AMBIENT.colorCold, AMBIENT.colorLit, ratio));
 
-    // Guaranteed contrast: outline strengthened as the light fades
+    // Guaranteed contrast: the moon rim strengthens as the light fades
     // (applied per obstacle in updateNearMiss).
     this.obstacleStrokeAlpha = Phaser.Math.Linear(
-      OBSTACLES.colors.strokeAlphaDark,
-      OBSTACLES.colors.strokeAlphaLit,
+      OBSTACLE_ART.rimAlphaDark,
+      OBSTACLE_ART.rimAlphaLit,
       ratio
     );
   }
@@ -864,20 +927,79 @@ export class FlightScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Which sentence fits this run. Fixed priority: a record beats everything,
+   * then a near miss on the record, then a long chain, then a run that ended
+   * before it started. `previousBest` is the record from BEFORE this run.
+   */
+  private pickDeathCategory(newBestScore: boolean, previousBest: number): DeathCategory {
+    if (newBestScore) return "newRecord";
+    if (previousBest > 0 && this.score >= previousBest * DEATH_MESSAGE.nearRecordRatio) {
+      return "nearRecord";
+    }
+    if (this.bestComboThisRun >= DEATH_MESSAGE.bigComboThreshold) return "bigCombo";
+    if (this.runDuration < DEATH_MESSAGE.earlyDeathSeconds) return "earlyDeath";
+    return "default";
+  }
+
+  /**
+   * Mini bar chart of the last runs, oldest left. The best of the five is
+   * highlighted. Drawn synchronously here — nothing about it is animated and
+   * nothing about it delays the replay tap.
+   */
+  private drawHistory(history: number[]): void {
+    this.historyBars.clear();
+    for (const label of this.historyLabels) label.setVisible(false);
+    if (history.length === 0) return;
+
+    const best = Math.max(...history);
+    const span = HISTORY.barWidth + HISTORY.barGap;
+    const totalWidth = history.length * HISTORY.barWidth + (history.length - 1) * HISTORY.barGap;
+    const startX = (WORLD.width - totalWidth) / 2 + HISTORY.barWidth / 2;
+
+    history.forEach((score, index) => {
+      const x = startX + index * span;
+      // Scale against the best of the window; a zero score still shows a sliver.
+      const ratio = best > 0 ? score / best : 0;
+      const height = Math.max(HISTORY.minBarHeight, Math.round(ratio * HISTORY.maxBarHeight));
+      const isBest = score === best;
+
+      this.historyBars.fillStyle(isBest ? HISTORY.recordColor : HISTORY.color, isBest ? 0.95 : 0.5);
+      this.historyBars.fillRoundedRect(
+        x - HISTORY.barWidth / 2,
+        HISTORY.baselineY - height,
+        HISTORY.barWidth,
+        height,
+        3
+      );
+
+      const label = this.historyLabels[index];
+      label
+        .setText(String(score))
+        .setPosition(x, HISTORY.baselineY + 6)
+        .setColor(isBest ? HISTORY.recordLabelColor : HISTORY.labelColor)
+        .setVisible(true);
+    });
+  }
+
   private die(): void {
     this.dead = true;
-    this.deathAt = this.time.now;
     this.witch.setAlpha(1);
     this.slowMoLeft = 0;
     this.tweens.timeScale = 1;
     this.sfx.death();
 
     // Persistence: the run is recorded exactly once, here.
-    const { newBestScore } = recordRun(this.score, this.bestComboThisRun, this.bestTierThisRun);
+    const { newBestScore, history, previousBest } = recordRun(
+      this.score,
+      this.bestComboThisRun,
+      this.bestTierThisRun
+    );
     this.lastRunWasRecord = newBestScore;
+    this.deathCategory = this.pickDeathCategory(newBestScore, previousBest);
 
     this.refreshDeathTexts();
-    this.recordText.setVisible(newBestScore);
+    this.drawHistory(history);
 
     // Resting scenery: hide the lost run and stop the gameplay emitters,
     // which would otherwise keep running behind an opaque sky.
@@ -924,6 +1046,14 @@ export class FlightScene extends Phaser.Scene {
     });
 
     this.sfx.graze(this.combo);
+
+    // The witch flinches away from what she just brushed: a micro-lean plus a
+    // ripple through the cape, gone in 150 ms. The side is read from the free
+    // band — whichever edge of the gap she passed closest to is the material
+    // she grazed, so she recoils the other way.
+    const grazedAbove =
+      Math.abs(obstacle.grazeY - obstacle.gapTop) < Math.abs(obstacle.gapBottom - obstacle.grazeY);
+    this.witch.grazeKick(grazedAbove ? 1 : -1);
 
     // Shake proportional to the combo, but always tiny.
     if (!this.reducedMotion) {
@@ -986,13 +1116,13 @@ export class FlightScene extends Phaser.Scene {
       // Exaggerated halo on the first run's onboarding obstacle.
       const teach = this.teaching && obstacle === this.teachTarget;
       obstacle.halo.setAlpha(
-        inZone
+        (inZone
           ? teach
             ? TEACH.haloAlphaActive
             : FEEDBACK.haloAlphaActive
           : teach
             ? TEACH.haloAlpha
-            : FEEDBACK.haloAlpha
+            : FEEDBACK.haloAlpha) * obstacle.haloAlphaScale
       );
       // Readability invariant: outline strengthened as the light fades.
       obstacle.setContrast(this.obstacleStrokeAlpha);
@@ -1086,7 +1216,7 @@ export class FlightScene extends Phaser.Scene {
     if (this.fullMoon === on && !instant) return;
     this.fullMoon = on;
 
-    this.witch.setFillStyle(on ? FULL_MOON.witchColor : FULL_MOON.witchColorNormal);
+    this.witch.setFullMoon(on);
 
     const duration = instant ? 0 : FULL_MOON.fadeMs;
     this.tweens.killTweensOf([this.moon, this.moonGlow, this.moonVeil]);
@@ -1191,7 +1321,7 @@ export class FlightScene extends Phaser.Scene {
 
     // Dead: the world is frozen, only the replay screen's scenery animates.
     if (this.dead) {
-      this.updateDeathScene(time);
+      this.updateDeathScene(time, deltaMs / 1000);
       return;
     }
     // Paused: everything is frozen, no death is possible.
@@ -1212,8 +1342,9 @@ export class FlightScene extends Phaser.Scene {
       WORLD.height - WITCH.marginBottom
     );
 
-    // Slight visual squash based on speed (feel).
-    this.witch.setScale(1, 1 - Math.abs(this.velocityY) / 2400);
+    // Posture: a real rotation driven by vertical speed, plus the trailing
+    // cape and hat tip. Purely visual — the hitbox does not rotate.
+    this.witch.update(dt, this.velocityY, WITCH.maxSpeed, this.comboRatio);
 
     // --- Difficulty: play time, current tier, smooth interpolation.
     this.updateDifficulty(dt);

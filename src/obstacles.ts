@@ -1,11 +1,23 @@
 import Phaser from "phaser";
-import { FEEDBACK, MAGIC, NEAR_MISS, OBSTACLES, WORLD } from "./config";
+import { FEEDBACK, MAGIC, MOON_EYE, NEAR_MISS, OBSTACLE_ART, OBSTACLES, WORLD } from "./config";
+import {
+  ensureObstacleTextures,
+  frameName,
+  MOON_ON_RIGHT,
+  SHAPE_METRICS,
+  SHAPE_TEXTURE,
+  type Essence
+} from "./obstacleShapes";
 
 /** Current difficulty parameters, interpolated between tiers by the scene. */
 export type Difficulty = {
   speed: number;
   gapSize: number;
   spawnInterval: number;
+  /** Tree species of the current tier — RENDERING ONLY. */
+  essence: Essence;
+  /** "The Moon's Eye" contrast inversion — RENDERING ONLY. */
+  inverted: boolean;
 };
 
 /**
@@ -70,8 +82,8 @@ export class Obstacle {
   minDistance = Infinity;
   grazeX = 0;
   grazeY = 0;
-  /** Last outline alpha applied (avoids redundant setStrokeStyle calls). */
-  private strokeAlpha = -1;
+  /** Last rim alpha applied (avoids redundant setAlpha calls). */
+  private rimAlpha = -1;
 
   constructor(
     readonly kind: ObstacleKind,
@@ -81,19 +93,26 @@ export class Obstacle {
     readonly gapBottom: number,
     readonly shapes: readonly CollisionShape[],
     readonly halfWidth: number,
-    readonly strokeShapes: readonly Phaser.GameObjects.Shape[]
+    /** Moon-lit edges, the obstacle's primary readability element. */
+    readonly rimImages: readonly Phaser.GameObjects.Image[],
+    /**
+     * Halo opacity multiplier. Above 1 under contrast inversion, where a dark
+     * ring on pale gold needs more presence than a bright one on black.
+     */
+    readonly haloAlphaScale: number,
+    /** Under contrast inversion the rim is a fixed dark edge, not a glow. */
+    private readonly fixedRimAlpha: number | null
   ) {}
 
   /**
-   * Guaranteed contrast: the bright outline strengthens as light fades, so the
+   * Guaranteed contrast: the moon rim strengthens as light fades, so the
    * obstacle stays perfectly readable at maximum darkness.
    */
   setContrast(alpha: number): void {
-    if (Math.abs(alpha - this.strokeAlpha) < 0.01) return;
-    this.strokeAlpha = alpha;
-    for (const shape of this.strokeShapes) {
-      shape.setStrokeStyle(2, OBSTACLES.colors.stroke, alpha);
-    }
+    const wanted = this.fixedRimAlpha ?? alpha;
+    if (Math.abs(wanted - this.rimAlpha) < 0.01) return;
+    this.rimAlpha = wanted;
+    for (const image of this.rimImages) image.setAlpha(wanted);
   }
 
   get x(): number {
@@ -147,7 +166,9 @@ export class ObstacleSpawner {
   private lastCategory: ObstacleCategory | null = null;
   private sameCategoryStreak = 0;
 
-  constructor(private readonly scene: Phaser.Scene) {}
+  constructor(private readonly scene: Phaser.Scene) {
+    ensureObstacleTextures(scene);
+  }
 
   /** Live obstacles, oldest first. */
   get all(): readonly Obstacle[] {
@@ -172,7 +193,7 @@ export class ObstacleSpawner {
       // Jitter around the tier interval, then the fairness cap.
       const jitter = Phaser.Math.FloatBetween(1 - OBSTACLES.intervalJitter, 1 + OBSTACLES.intervalJitter);
       this.nextInterval = clampInterval(diff.spawnInterval * jitter);
-      this.spawn(diff.gapSize);
+      this.spawn(diff);
     }
 
     const step = diff.speed * dt;
@@ -186,20 +207,19 @@ export class ObstacleSpawner {
     }
   }
 
-  private spawn(gapSize: number): void {
+  private spawn(diff: Difficulty): void {
+    const gapSize = diff.gapSize;
     const category = this.pickCategory();
     const container = this.scene.add
       .container(WORLD.width + OBSTACLES.spawnMargin, 0)
       .setDepth(OBSTACLE_DEPTH);
     const shapes: CollisionShape[] = [];
-    const strokes: Phaser.GameObjects.Shape[] = [];
     const parts: Part[] = [];
 
     let kind: ObstacleKind;
     let gapTop: number;
     let gapBottom: number;
     let cap: number;
-    let color: number;
 
     // A branch can only be narrowed if its band is reachable from the current
     // flight line (maxGapShift). When NEITHER side can be, we place a trunk
@@ -228,7 +248,6 @@ export class ObstacleSpawner {
     if (buildTrunk) {
       kind = "trunk";
       cap = OBSTACLES.trunk.width / 2;
-      color = OBSTACLES.colors.trunkFill;
 
       // Hole = the tier's gapSize +/- jitter, never below the playable floor.
       const gapHeight = Math.max(
@@ -250,7 +269,6 @@ export class ObstacleSpawner {
       parts.push({ top: gapBottom + cap, bottom: WORLD.height, tipAtBottom: false });
     } else {
       cap = OBSTACLES.branch.width / 2;
-      color = OBSTACLES.colors.fill;
 
       // Pick the narrower side (lengths are already bounded by reachability
       // above), at random when both are equivalent.
@@ -272,15 +290,48 @@ export class ObstacleSpawner {
       }
     }
 
-    // Halo first: added to the container before the bars, so it renders behind.
-    const halo = this.scene.add.graphics().setAlpha(FEEDBACK.haloAlpha);
+    // Halo first: added to the container before the art, so it renders behind.
+    // Under contrast inversion it flips to dark-on-light, because a pale violet
+    // ring on pale gold would stop teaching the rule.
+    const halo = this.scene.add.graphics();
     container.add(halo);
-    halo.fillStyle(FEEDBACK.haloColor, 1);
+    halo.fillStyle(diff.inverted ? MOON_EYE.haloColor : FEEDBACK.haloColor, 1);
     for (const part of parts) this.addHalo(halo, part, cap);
 
+    // COLLISION — unchanged: one rectangle plus one rounded tip per part. The
+    // art below is built around these primitives and never replaces them.
     for (const part of parts) {
-      this.addBar(container, shapes, strokes, cap * 2, part.top, part.bottom, color);
-      this.addTip(container, shapes, strokes, part.tipAtBottom ? part.bottom : part.top, cap, color);
+      const height = part.bottom - part.top;
+      if (height <= 0) continue;
+      shapes.push({ type: "rect", halfWidth: cap, top: part.top, bottom: part.bottom });
+      shapes.push({ type: "circle", y: part.tipAtBottom ? part.bottom : part.top, radius: cap });
+    }
+
+    // ART — bodies first, then rims, so every rim sits on top.
+    const rims: Phaser.GameObjects.Image[] = [];
+    const bodyColor = diff.inverted ? MOON_EYE.bodyColor : OBSTACLE_ART.bodyColor;
+    const rimColor = diff.inverted ? MOON_EYE.rimColor : OBSTACLE_ART.rimColor;
+    // One variant per part, drawn once: body and rim must share the same shape.
+    const variants = parts.map(() => Phaser.Math.Between(0, OBSTACLE_ART.variantsPerEssence - 1));
+    for (const layer of ["body", "rim"] as const) {
+      parts.forEach((part, i) => {
+        if (part.bottom - part.top <= 0) return;
+        const anchorY = part.tipAtBottom ? part.top : part.bottom;
+        const endY = part.tipAtBottom ? part.bottom : part.top;
+        const images = this.addSilhouette(
+          container,
+          layer,
+          diff.essence,
+          variants[i],
+          anchorY,
+          endY,
+          cap
+        );
+        for (const image of images) {
+          image.setTint(layer === "body" ? bodyColor : rimColor);
+          if (layer === "rim") rims.push(image);
+        }
+      });
     }
 
     // The player follows the shortest path, so we remember where they will
@@ -293,7 +344,20 @@ export class ObstacleSpawner {
       Math.min(gapBottom - clearance, WORLD.height - OBSTACLES.safeMarginBottom)
     );
 
-    this.obstacles.push(new Obstacle(kind, container, halo, gapTop, gapBottom, shapes, cap, strokes));
+    this.obstacles.push(
+      new Obstacle(
+        kind,
+        container,
+        halo,
+        gapTop,
+        gapBottom,
+        shapes,
+        cap,
+        rims,
+        diff.inverted ? MOON_EYE.haloAlphaScale : 1,
+        diff.inverted ? MOON_EYE.rimAlpha : null
+      )
+    );
   }
 
   /**
@@ -321,39 +385,55 @@ export class ObstacleSpawner {
     return Math.max(OBSTACLES.branch.lengthMin, Math.min(wanted, maxLength));
   }
 
-  /** Vertical bar between two heights (geometric placeholder art). */
-  private addBar(
+  /**
+   * Draws one part's silhouette, from the screen edge (`anchorY`) to the
+   * collision end (`endY`). Two frames, because they scale differently:
+   *
+   *  - the SHAFT stretches over the part's length; its half-width never drops
+   *    below one collision radius, so stretching cannot expose the hitbox;
+   *  - the TIP is drawn at a fixed pixel scale (`cap` px per unit) starting
+   *    `tipStartBeforeEnd` radii before the collision end. Its profile was
+   *    generated as the max of the art and the rounded cap's own outline, so
+   *    the capsule's round end is covered — and because it is never stretched,
+   *    the overshoot past the hitbox stays a bounded ~1.2 radii on long
+   *    obstacles instead of growing with their length.
+   */
+  private addSilhouette(
     container: Phaser.GameObjects.Container,
-    shapes: CollisionShape[],
-    strokes: Phaser.GameObjects.Shape[],
-    width: number,
-    top: number,
-    bottom: number,
-    color: number
-  ): void {
-    const height = bottom - top;
-    if (height <= 0) return;
-    const bar = this.scene.add.rectangle(0, top + height / 2, width, height, color);
-    bar.setStrokeStyle(2, OBSTACLES.colors.stroke, OBSTACLES.colors.strokeAlphaLit);
-    container.add(bar);
-    shapes.push({ type: "rect", halfWidth: width / 2, top, bottom });
-    strokes.push(bar);
-  }
+    layer: "body" | "rim",
+    essence: Essence,
+    variant: number,
+    anchorY: number,
+    endY: number,
+    cap: number
+  ): Phaser.GameObjects.Image[] {
+    const down = endY > anchorY;
+    const sign = down ? 1 : -1;
+    const width = SHAPE_METRICS.halfWidthUnits * 2 * cap;
+    // Never let the tip start before the anchor: on very short parts the whole
+    // silhouette is the tip, which still covers the capsule (its floor is a
+    // full radius up to the collision end).
+    const shaftLen = Math.max(0, Math.abs(endY - anchorY) - SHAPE_METRICS.tipStartBeforeEnd * cap);
+    const tipLen = SHAPE_METRICS.tipUnits * cap;
 
-  /** Rounded end of a branch / edge of a hole. */
-  private addTip(
-    container: Phaser.GameObjects.Container,
-    shapes: CollisionShape[],
-    strokes: Phaser.GameObjects.Shape[],
-    y: number,
-    radius: number,
-    color: number
-  ): void {
-    const tip = this.scene.add.circle(0, y, radius, color);
-    tip.setStrokeStyle(2, OBSTACLES.colors.stroke, OBSTACLES.colors.strokeAlphaLit);
-    container.add(tip);
-    shapes.push({ type: "circle", y, radius });
-    strokes.push(tip);
+    const images: Phaser.GameObjects.Image[] = [];
+    const place = (zone: "shaft" | "tip", from: number, to: number) => {
+      if (to - from <= 0) return;
+      const image = this.scene.add
+        .image(0, anchorY + sign * (from + to) / 2, SHAPE_TEXTURE, frameName(layer, essence, variant, zone))
+        .setOrigin(0.5, 0.5)
+        .setFlipY(down)
+        // Single light direction: the rim is baked on +x, so it only needs
+        // mirroring when the moon is on the other side of the screen.
+        .setFlipX(!MOON_ON_RIGHT)
+        .setDisplaySize(width, to - from);
+      container.add(image);
+      images.push(image);
+    };
+
+    place("shaft", 0, shaftLen);
+    place("tip", shaftLen, shaftLen + tipLen);
+    return images;
   }
 
   private pickCategory(): ObstacleCategory {
