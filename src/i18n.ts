@@ -37,6 +37,7 @@ const EN = {
   "help.combo": "Chain grazes to multiply",
 
   "death.causeBranch": "You hit a branch",
+  "death.causeTrunk": "You hit a trunk",
   "death.tier": "Tier · {tier}",
   "death.bestCombo": "Best combo · {combo}",
   "death.share": "Share",
@@ -81,6 +82,7 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "help.combo": "Enchaîne les frôlements pour multiplier",
 
     "death.causeBranch": "Tu as touché une branche",
+    "death.causeTrunk": "Tu as touché un tronc",
     "death.tier": "Palier · {tier}",
     "death.bestCombo": "Meilleur combo · {combo}",
     "death.share": "Partager",
@@ -120,6 +122,7 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "help.combo": "Encadena rozaduras para multiplicar",
 
     "death.causeBranch": "Has tocado una rama",
+    "death.causeTrunk": "Has tocado un tronco",
     "death.tier": "Nivel · {tier}",
     "death.bestCombo": "Mejor combo · {combo}",
     "death.share": "Compartir",
@@ -159,6 +162,7 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "help.combo": "Concatena le sfiorate per moltiplicare",
 
     "death.causeBranch": "Hai toccato un ramo",
+    "death.causeTrunk": "Hai toccato un tronco",
     "death.tier": "Livello · {tier}",
     "death.bestCombo": "Miglior combo · {combo}",
     "death.share": "Condividi",

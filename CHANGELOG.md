@@ -15,6 +15,11 @@ radius, the tier parameters and the generator are untouched.
 
 ### Added
 
+**Balance instrumentation**
+- Death log in `moonwick:deaths`: the last 50 deaths, each with seconds survived, tier, cause and grazes completed. The tuning source of truth.
+- Tuning readout, opened by a long press on the logo: median survival, median grazes, share of deaths under the quick-death threshold, cause split, and the death distribution per tier as bars. A debug surface, deliberately outside i18n.
+- Adaptive easing: after 3 consecutive deaths under 12 s the next run quietly gets +15% gap and -10% speed, lifted mid-run once the player passes 20 s. Totally invisible — no message, no icon — and disableable with `MERCY.enabled`. The trigger is derived from the death log rather than stored, so it cannot drift out of sync.
+
 **Death screen**
 - Score history: the last five scores are kept in `moonwick:history` and drawn as a mini bar chart, oldest on the left, with the best of the five in gold.
 - Contextual game-over message, picked from five situations (new record, near record, big combo, early death, default) with two to three random variants each, written out in full per language — never assembled from fragments.
@@ -37,6 +42,14 @@ radius, the tier parameters and the generator are untouched.
 
 ### Changed
 
+**Difficulty rebalance** (playtest: too hard). Tuning only, no mechanic changed.
+- **Grazing is no longer compulsory.** The game used to guarantee that from The Brambles onwards half the gap was narrower than the graze ring, making a clean crossing structurally impossible. That is deliberately reversed: every tier, including The Wall, can now be crossed without ever entering the ring. The pressure to graze is economic instead — only grazes score, and dark points decay to zero. A dev assertion enforces the new rule, replacing the one that enforced the old one.
+- `GLOBAL_SPEED` (0.85) introduced: one knob for the whole game's rhythm. It multiplies the scroll speed and divides the spawn interval, so the course keeps its exact spatial layout and only time is stretched.
+- The Edge became a 30 s learning tier (was 25 s), the widest and slowest. A naive bot aiming at the middle of each gap clears it 12/12.
+- `gapSize` progression re-spread across all five tiers: 250 / 170 / 130 / 105 / 96 (was 250 / 140 / 70 / 67 / 64).
+- Lethal hitbox reduced from 10 px to 8 px, purely for perceived generosity. The graze ring is unchanged.
+- The fairness assertion now checks the interval *after* `GLOBAL_SPEED`; otherwise `clampInterval` would silently cap it and the slowdown would stop applying at the widest tiers.
+
 - **Collision and visuals are now separated.** Detection still runs on invisible primitives (one rectangle plus one circle per obstacle part; a circle centred on the witch's torso), and the art is built around them. The rule is one-way: the visual may overshoot the hitbox, never fall inside it.
 - **The witch's hitbox is centred on her torso**, not on her drawing's bounding box. The torso is also the sprite's origin and its rotation pivot, so art and collision cannot drift apart. Hat, cape and broom brush are never lethal.
 - **The witch's body was lifted off pure black.** At near-black her contrast against the sky collapsed as the scene darkened — precisely when the combo is lost and she is hardest to find. Lifted, contrast rises as the light fades.
@@ -57,6 +70,7 @@ radius, the tier parameters and the generator are untouched.
 - The rounded end of an obstacle's hitbox was only covered by an antialiased edge; the cap is now inflated by a safety margin, since at the apex the limiting direction is along the axis rather than across it.
 - The witch's aura was sized as a multiple of the 256 px light texture, which floodlit the screen at Full Moon instead of rimming her; it is now sized in pixels.
 - The witch's hat was clipped by the top of the screen whenever the player held a climb into the ceiling; it is now sized against `WITCH.marginTop`.
+- The death screen always said "You hit a branch", even after hitting a trunk: the real cause is now captured at the moment of contact, and `death.causeTrunk` was added in all four languages.
 - The "How to play" hit zone overlapped the "Back" button in the settings.
 - The settings panel showed through the help page.
 

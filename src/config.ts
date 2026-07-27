@@ -45,20 +45,43 @@ export const WITCH = {
 } as const;
 
 /**
- * P5 — Difficulty tiers. The main lever is NARROWING (`gapSize`, the target
- * height of the gap, for trunks AND branches).
+ * Global pace. Multiplies the scroll speed AND divides the spawn interval, so
+ * the SPATIAL layout of the forest is untouched and only time is stretched:
+ * distance between obstacles = speed x interval = (k.v) x (I/k) = v.I.
+ * The player gets more reaction time for exactly the same course.
  *
- * VERIFIABLE GOAL — from "The Brambles" onwards, crossing without grazing is
- * STRUCTURALLY impossible: half the gap width, worst-case jitter included,
- * must be < the graze zone (38 px), i.e. max gap < 76.
- * Max gap = gapSize + max(trunk gapJitter = 4, branch bandJitter = 5).
- *   - The Edge      : 250 + 5 = 255 -> half 127.5  (learning, everything fits)
- *   - The Dark Wood : 140 + 5 = 145 -> half 72.5   (bridge: still avoidable)
- *   - The Brambles  :  70 + 5 =  75 -> half 37.5 < 38  IMPOSSIBLE without grazing
- *   - The Wall      :  67 + 5 =  72 -> half 36   < 38  same, tighter
- *   - The Moon's Eye:  64 + 5 =  69 -> half 34.5 < 38  floor (gapFloor)
- * Speed only rises moderately (+30%). The last tier is a PLATEAU: beyond it
- * difficulty freezes and skill alone decides how long a run lasts.
+ * One knob for the whole game's rhythm. Below 1 = easier, above 1 = harder.
+ */
+export const GLOBAL_SPEED = 0.85;
+
+/**
+ * Difficulty tiers. The main lever is NARROWING (`gapSize`, the target height
+ * of the gap, for trunks AND branches).
+ *
+ * REBALANCE (playtest: the game was too hard). The former goal — from "The
+ * Brambles" onwards, half the gap smaller than the graze zone so crossing
+ * without grazing was STRUCTURALLY impossible — is DELIBERATELY REVERSED.
+ * Crossing cleanly is now possible at every tier, including The Wall; it is
+ * simply barely worth anything, because only grazes score and dark points
+ * fade to zero (SCORING.darkPointsSequence). The incentive to graze is now
+ * economic instead of structural.
+ *
+ * VERIFIABLE GOAL — at EVERY tier, half the gap at its NARROWEST (worst-case
+ * jitter) must exceed the graze radius (38 px), i.e. min gap > 76.
+ * Min gap = gapSize - max(trunk gapJitter = 4, branch bandJitter = 5).
+ *   - The Edge      : 250 - 5 = 245 -> half 122.5  (learning: 30 s, slow, wide)
+ *   - The Dark Wood : 170 - 5 = 165 -> half  82.5
+ *   - The Brambles  : 130 - 5 = 125 -> half  62.5
+ *   - The Wall      : 105 - 5 = 100 -> half  50
+ *   - The Moon's Eye:  88 - 5 =  83 -> half  41.5  (tightest, still passable)
+ * A dev assertion at the end of this file enforces it on every tier.
+ *
+ * `spawnInterval` values are the values BEFORE GLOBAL_SPEED. They are chosen
+ * so the effective interval still fits under the fairness cap once divided by
+ * it — otherwise `clampInterval` would silently eat the slowdown.
+ *
+ * The last tier is a PLATEAU: beyond it difficulty freezes and skill alone
+ * decides how long a run lasts.
  */
 export type Tier = {
   /** i18n key for the tier name (no hard-coded label: see i18n.ts). */
@@ -85,17 +108,19 @@ export type Tier = {
 };
 
 export const TIERS: readonly Tier[] = [
-  // 250+5=255, half 127.5: wide, you learn to graze without risk.
-  { nameKey: "tier.edge",     startTime: 0,   scrollSpeed: 220, gapSize: 250, spawnInterval: 1.9,  skyTop: 0x0b0716, skyBottom: 0x241a4a, essence: "birch" },
-  // 140+5=145, half 72.5: last tier where pure avoidance is still possible.
-  { nameKey: "tier.darkwood", startTime: 25,  scrollSpeed: 240, gapSize: 140, spawnInterval: 1.75, skyTop: 0x070410, skyBottom: 0x1a1038, essence: "gnarled" },
-  // 70+5=75, half 37.5 < 38: grazing becomes structurally unavoidable.
-  { nameKey: "tier.brambles", startTime: 50,  scrollSpeed: 255, gapSize: 70,  spawnInterval: 1.6,  skyTop: 0x0a0512, skyBottom: 0x2a1230, essence: "bramble" },
-  // 67+5=72, half 36 < 38.
-  { nameKey: "tier.wall",     startTime: 80,  scrollSpeed: 270, gapSize: 67,  spawnInterval: 1.5,  skyTop: 0x060309, skyBottom: 0x1f0d22, essence: "denseStand" },
-  // 64+5=69, half 34.5 < 38 — absolute floor (gapFloor), final plateau.
-  // Same shapes as The Wall, but the contrast flips: the moon floods the sky.
-  { nameKey: "tier.moonEye",  startTime: 120, scrollSpeed: 285, gapSize: 64,  spawnInterval: 1.4,  skyTop: 0x0d0a1f, skyBottom: 0x33205c, essence: "denseStand", invertContrast: true }
+  // LEARNING TIER, 30 s: wide, slow, forgiving. A first-time player must be
+  // able to survive here without effort and discover grazing on their own.
+  { nameKey: "tier.edge",     startTime: 0,   scrollSpeed: 220, gapSize: 250, spawnInterval: 1.75, skyTop: 0x0b0716, skyBottom: 0x241a4a, essence: "birch" },
+  // half 82.5: the forest closes in, still very passable.
+  { nameKey: "tier.darkwood", startTime: 30,  scrollSpeed: 235, gapSize: 170, spawnInterval: 1.7,  skyTop: 0x070410, skyBottom: 0x1a1038, essence: "gnarled" },
+  // half 62.5: grazing becomes clearly the profitable line, never the only one.
+  { nameKey: "tier.brambles", startTime: 55,  scrollSpeed: 248, gapSize: 130, spawnInterval: 1.6,  skyTop: 0x0a0512, skyBottom: 0x2a1230, essence: "bramble" },
+  // half 50: tight, and still crossable clean by a careful player.
+  { nameKey: "tier.wall",     startTime: 85,  scrollSpeed: 258, gapSize: 105, spawnInterval: 1.5,  skyTop: 0x060309, skyBottom: 0x1f0d22, essence: "denseStand" },
+  // half 45.5: the narrowest the game ever gets, final plateau. Measured clean
+  // corridor ~15 px — demanding, but a real line rather than a pixel-perfect
+  // stunt (at gapSize 88 it was down to 8 px).
+  { nameKey: "tier.moonEye",  startTime: 125, scrollSpeed: 268, gapSize: 96,  spawnInterval: 1.45, skyTop: 0x0d0a1f, skyBottom: 0x33205c, essence: "denseStand", invertContrast: true }
 ];
 
 /** Sky colours actually used by a tier, once the inversion toggle is applied. */
@@ -176,7 +201,8 @@ export const OBSTACLES = {
   // the next hole is always reachable at maximum flight speed.
   maxGapShift: 260,
   // Absolute floor for a gap, whatever the tier: below this the game would
-  // be literally impassable (2x10 px hitbox + margin).
+  // be literally impassable (2x8 px hitbox + margin). No tier reaches it any
+  // more since the rebalance; it stays as a backstop for hand tuning.
   gapFloor: 64,
 
   // Relative frequency of the 3 types. Trunks are hardest, so rarest.
@@ -409,9 +435,11 @@ export const AMBIENT = {
  * the obstacle SURFACE (not centre to centre).
  */
 export const NEAR_MISS = {
-  // Lethal hitbox deliberately smaller than the visual (WITCH.radius): the
-  // player should feel they slipped through, never that they were robbed.
-  deathRadius: 10,
+  // Lethal hitbox deliberately smaller than the visual: the player should feel
+  // they slipped through, never that they were robbed. Lowered 10 -> 8 in the
+  // rebalance, purely for perceived generosity — the graze ring is unchanged,
+  // so the ring simply starts closer to the witch.
+  deathRadius: 8,
   // Graze ring: deathRadius < d <= grazeRadius.
   grazeRadius: 38,
   // NB: the delay before falling back to x1 is carried by the gauge
@@ -611,6 +639,40 @@ export const DEATH_MESSAGE = {
   earlyDeathSeconds: 10
 } as const;
 
+/**
+ * Death log — the tuning source of truth. The last `size` deaths are kept in
+ * `moonwick:deaths` and summarised on the stats screen (long press on the
+ * title). Measurement only: nothing here feeds back into gameplay except
+ * through MERCY below.
+ */
+export const DEATHS = {
+  size: 50
+} as const;
+
+/**
+ * Adaptive easing. After `deathsToTrigger` consecutive deaths under
+ * `quickDeathSeconds`, the next run is quietly made more generous; the help
+ * lifts as soon as the player passes `clearSeconds` in a run.
+ *
+ * TOTALLY INVISIBLE: no message, no icon, no sound. A player being helped must
+ * never be told, or the help becomes a judgement on their skill.
+ *
+ * The trigger state is DERIVED from the death log rather than stored: a run
+ * over `clearSeconds` naturally breaks the trailing streak of quick deaths, so
+ * there is no second source of truth to keep in sync.
+ */
+export const MERCY = {
+  enabled: true,
+  deathsToTrigger: 3,
+  quickDeathSeconds: 12,
+  /** Gap widening, as a fraction. */
+  gapBonus: 0.15,
+  /** Scroll speed reduction, as a fraction. */
+  speedRelief: 0.1,
+  /** Surviving this long in one run lifts the help, mid-run. */
+  clearSeconds: 20
+} as const;
+
 /** Draws the lethal hitbox, the graze ring and the collision shapes. */
 export const DEBUG_HITBOX = false;
 
@@ -631,12 +693,37 @@ export const DEBUG_RESET_TUTORIAL = false;
 if (import.meta.env.DEV) {
   const limit = MAGIC.max * MAGIC.grazeWindowFactor;
   for (const tier of TIERS) {
-    const worst = tier.spawnInterval * (1 + OBSTACLES.intervalJitter);
+    // GLOBAL_SPEED stretches the interval, so the check has to run on the
+    // EFFECTIVE value. Otherwise clampInterval quietly caps it at runtime and
+    // the slowdown silently stops applying at the widest tiers.
+    const effective = tier.spawnInterval / GLOBAL_SPEED;
+    const worst = effective * (1 + OBSTACLES.intervalJitter);
     if (worst > limit) {
       throw new Error(
         `TIERS "${tier.nameKey}": spawnInterval ${tier.spawnInterval}s ` +
-          `(worst case ${worst.toFixed(2)}s with jitter) exceeds the limit ` +
+          `(${effective.toFixed(2)}s after GLOBAL_SPEED, worst case ` +
+          `${worst.toFixed(2)}s with jitter) exceeds the limit ` +
           `MAGIC.max * grazeWindowFactor = ${limit}s`
+      );
+    }
+  }
+}
+
+// --- Guard rail (dev only): every tier must stay crossable WITHOUT grazing.
+// This is the rebalance's central promise, and it is the exact inverse of the
+// rule this file used to enforce. Grazing must stay a choice the player makes
+// for points, never a toll the geometry collects.
+if (import.meta.env.DEV) {
+  const jitter = Math.max(OBSTACLES.trunk.gapJitter, OBSTACLES.branch.bandJitter);
+  for (const tier of TIERS) {
+    const halfNarrowest = (tier.gapSize - jitter) / 2;
+    if (halfNarrowest <= NEAR_MISS.grazeRadius) {
+      throw new Error(
+        `TIERS "${tier.nameKey}": gapSize ${tier.gapSize} leaves a half-gap of ` +
+          `${halfNarrowest}px at its narrowest, which is inside the ` +
+          `${NEAR_MISS.grazeRadius}px graze ring — crossing without grazing ` +
+          `would be impossible there. Raise gapSize above ` +
+          `${NEAR_MISS.grazeRadius * 2 + jitter}.`
       );
     }
   }

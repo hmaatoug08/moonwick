@@ -3,7 +3,9 @@ import {
   AMBIENT,
   BRAND,
   FEEDBACK,
+  DEATHS,
   FULL_MOON,
+  MERCY,
   OBSTACLE_ART,
   TIERS,
   TRAIL,
@@ -13,7 +15,7 @@ import {
 import { MOON_ON_RIGHT } from "./obstacleShapes";
 import { Witch } from "./witchShape";
 import { getLanguage, LANG_NAMES, LANGS, Lang, onLanguageChange, setLanguage, t } from "./i18n";
-import { isSoundEnabled, loadStats, setSoundEnabled } from "./save";
+import { isSoundEnabled, loadDeaths, loadStats, setSoundEnabled, shouldEase } from "./save";
 import { ensureTextures, LIGHT_KEY, SPARK_KEY } from "./textures";
 import { buttonWidth, fitText } from "./ui";
 
@@ -25,6 +27,9 @@ import { buttonWidth, fitText } from "./ui";
  * No literal display string here: everything goes through i18n, except the
  * brand name, which is never translated.
  */
+/** How long the logo must be held to open the tuning readout. */
+const LONG_PRESS_MS = 700;
+
 export class MenuScene extends Phaser.Scene {
   private demoWitch!: Witch;
 
@@ -45,6 +50,15 @@ export class MenuScene extends Phaser.Scene {
   /** "How to play" page: reachable only from the settings, never automatic. */
   private helpPanel!: Phaser.GameObjects.Container;
   private helpOpen = false;
+
+  /** Tuning readout: long press on the logo. See buildStats(). */
+  private statsOpen = false;
+  private statsPanel!: Phaser.GameObjects.Container;
+  private statsText!: Phaser.GameObjects.Text;
+  private titleZone!: Phaser.Geom.Rectangle;
+  private longPress?: Phaser.Time.TimerEvent;
+  /** The long press already opened the stats: the release must not start a run. */
+  private longPressFired = false;
   private helpBackZone!: Phaser.Geom.Rectangle;
   private helpTitleText!: Phaser.GameObjects.Text;
   private helpBackText!: Phaser.GameObjects.Text;
@@ -108,16 +122,23 @@ export class MenuScene extends Phaser.Scene {
     this.buildHome();
     this.buildSettings();
     this.buildHelp();
+    this.buildStats();
     // Phaser reuses the scene instance, so the open/closed state must be
     // reset here, otherwise it would survive a return to the menu.
     this.settingsOpen = false;
     this.settingsPanel.setVisible(false);
     this.helpOpen = false;
     this.helpPanel.setVisible(false);
+    this.statsOpen = false;
+    this.statsPanel.setVisible(false);
     this.refreshTexts();
     this.setHomeVisible(true);
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => this.onPointerDown(pointer));
+    this.input.on("pointerup", () => this.onPointerUp());
+    this.input.on("pointerupoutside", () => this.onPointerUp());
+    // A pending long press must not fire into a scene that is going away.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cancelLongPress());
 
     // Immediate refresh when the language changes, with no reload.
     const unsubscribe = onLanguageChange(() => this.refreshTexts());
@@ -156,6 +177,9 @@ export class MenuScene extends Phaser.Scene {
       .setDepth(20);
     this.titleText.setLetterSpacing(BRAND.letterSpacing);
     fitText(this.titleText, WORLD.width - 40, BRAND.fontSizePx);
+    // Long-press target. Padded well beyond the glyphs: this is a hidden
+    // gesture, it should not demand precision.
+    this.titleZone = new Phaser.Geom.Rectangle(0, 150, WORLD.width, 130);
 
     this.bestText = this.add
       .text(cx, 278, "", { fontFamily: "sans-serif", color: "#d9a7ff" })
@@ -489,7 +513,99 @@ export class MenuScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Tuning readout, opened by a long press on the logo. Deliberately a DEBUG
+   * surface: like the DEBUG_STATS overlay, its labels are technical tokens and
+   * stay out of i18n — only tier names, which are keys, go through t().
+   * Nothing here is meant for players; it exists to tune difficulty against
+   * the recorded deaths rather than against a hunch.
+   */
+  private buildStats(): void {
+    const veil = this.add
+      .rectangle(0, 0, WORLD.width, WORLD.height, 0x05030c, 0.96)
+      .setOrigin(0, 0);
+    this.statsText = this.add
+      .text(28, 90, "", {
+        fontFamily: "monospace",
+        fontSize: "16px",
+        color: "#cbb9ff",
+        lineSpacing: 6
+      })
+      .setOrigin(0, 0);
+    this.statsPanel = this.add
+      .container(0, 0, [veil, this.statsText])
+      .setDepth(32)
+      .setVisible(false);
+  }
+
+  private refreshStats(): void {
+    const deaths = loadDeaths();
+    const lines: string[] = [`DEATHS  ${deaths.length}/${DEATHS.size}`, ""];
+
+    if (deaths.length === 0) {
+      lines.push("no runs recorded yet");
+      this.statsText.setText(lines.join("\n"));
+      return;
+    }
+
+    const median = (values: number[]): number => {
+      const sorted = [...values].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    };
+
+    lines.push(`MEDIAN SURVIVAL  ${median(deaths.map((d) => d.t)).toFixed(1)}s`);
+    lines.push(`MEDIAN GRAZES    ${median(deaths.map((d) => d.grazes)).toFixed(0)}`);
+    const quick = deaths.filter((d) => d.t < MERCY.quickDeathSeconds).length;
+    lines.push(`UNDER ${MERCY.quickDeathSeconds}s        ${Math.round((quick / deaths.length) * 100)}%`);
+    const trunks = deaths.filter((d) => d.cause === "trunk").length;
+    lines.push(`CAUSE            ${deaths.length - trunks} branch / ${trunks} trunk`);
+    lines.push("");
+    lines.push("DEATHS BY TIER");
+
+    TIERS.forEach((tier, index) => {
+      const count = deaths.filter((d) => d.tier === index).length;
+      const share = count / deaths.length;
+      // A bar beats a number for spotting where runs actually end.
+      const bar = "#".repeat(Math.round(share * 24)).padEnd(24, ".");
+      lines.push(`${t(tier.nameKey).padEnd(14).slice(0, 14)} ${bar} ${count}`);
+    });
+
+    lines.push("");
+    lines.push(shouldEase(deaths) ? "EASING: ON (next run)" : "EASING: off");
+    lines.push("");
+    lines.push("tap to close");
+    this.statsText.setText(lines.join("\n"));
+  }
+
+  private cancelLongPress(): void {
+    this.longPress?.remove();
+    this.longPress = undefined;
+  }
+
+  /** Release: either the long press already fired, or it was a normal tap. */
+  private onPointerUp(): void {
+    const pending = this.longPress !== undefined;
+    this.cancelLongPress();
+    if (this.longPressFired) {
+      this.longPressFired = false;
+      return;
+    }
+    // A short press on the logo still starts a run — just on release, since
+    // that is the only moment we know it was not a long press.
+    if (pending && !this.statsOpen && !this.settingsOpen && !this.helpOpen) {
+      this.scene.start("flight");
+    }
+  }
+
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
+    if (this.statsOpen) {
+      this.statsOpen = false;
+      this.statsPanel.setVisible(false);
+      this.setHomeVisible(true);
+      return;
+    }
+
     // Help sits on top of the settings, so it is tested first.
     if (this.helpOpen) {
       if (this.helpBackZone.contains(pointer.x, pointer.y)) {
@@ -536,6 +652,23 @@ export class MenuScene extends Phaser.Scene {
       this.setHomeVisible(false);
       return;
     }
+
+    // On the logo the decision waits for the release: a short press plays, a
+    // long one opens the tuning readout. Everywhere else the tap starts the
+    // run immediately, so the game keeps its instant feel.
+    if (this.titleZone.contains(pointer.x, pointer.y)) {
+      this.longPressFired = false;
+      this.longPress = this.time.delayedCall(LONG_PRESS_MS, () => {
+        this.longPress = undefined;
+        this.longPressFired = true;
+        this.statsOpen = true;
+        this.refreshStats();
+        this.setHomeVisible(false);
+        this.statsPanel.setVisible(true);
+      });
+      return;
+    }
+
     this.scene.start("flight");
   }
 

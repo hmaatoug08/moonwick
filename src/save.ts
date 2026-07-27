@@ -1,4 +1,4 @@
-import { DEBUG_RESET_TUTORIAL, HISTORY } from "./config";
+import { DEATHS, DEBUG_RESET_TUTORIAL, HISTORY, MERCY } from "./config";
 
 /**
  * localStorage persistence. Every key is prefixed with `moonwick:`.
@@ -16,6 +16,10 @@ import { DEBUG_RESET_TUTORIAL, HISTORY } from "./config";
  *                          permanently over navigator.language
  *   moonwick:history       JSON array of the last HISTORY.size scores, oldest
  *                          first; malformed content degrades to an empty list
+ *   moonwick:deaths        JSON array of the last DEATHS.size deaths, oldest
+ *                          first: { t: seconds survived, tier, cause, grazes }
+ *                          — the tuning source of truth, and what the adaptive
+ *                          easing is derived from
  *
  * Legacy `sorciere:` keys are migrated automatically (see below).
  */
@@ -98,6 +102,73 @@ function pushHistory(score: number): number[] {
   const history = [...loadHistory(), score].slice(-HISTORY.size);
   write("history", JSON.stringify(history));
   return history;
+}
+
+/** Why the run ended. Only obstacles kill, so this says which kind. */
+export type DeathCause = "branch" | "trunk";
+
+/** One recorded death. Short keys: fifty of these live in one storage value. */
+export type DeathRecord = {
+  /** Seconds survived. */
+  t: number;
+  /** Index into TIERS where the run ended. */
+  tier: number;
+  cause: DeathCause;
+  /** Grazes completed during the run. */
+  grazes: number;
+};
+
+/**
+ * The last deaths, oldest first. Never throws: corrupted or hand-edited
+ * content reads back as an empty log, and individual malformed entries are
+ * dropped rather than poisoning the whole list.
+ */
+export function loadDeaths(): DeathRecord[] {
+  const raw = read("deaths");
+  if (raw === null) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((v): v is DeathRecord => {
+        if (typeof v !== "object" || v === null) return false;
+        const r = v as Partial<DeathRecord>;
+        return (
+          typeof r.t === "number" &&
+          Number.isFinite(r.t) &&
+          typeof r.tier === "number" &&
+          Number.isFinite(r.tier) &&
+          (r.cause === "branch" || r.cause === "trunk") &&
+          typeof r.grazes === "number" &&
+          Number.isFinite(r.grazes)
+        );
+      })
+      .slice(-DEATHS.size);
+  } catch {
+    return [];
+  }
+}
+
+/** Appends a death and keeps only the last DEATHS.size entries. */
+export function pushDeath(record: DeathRecord): DeathRecord[] {
+  const deaths = [...loadDeaths(), record].slice(-DEATHS.size);
+  write("deaths", JSON.stringify(deaths));
+  return deaths;
+}
+
+/**
+ * Whether the next run should get the adaptive easing.
+ *
+ * DERIVED, never stored: it is simply "the last `deathsToTrigger` deaths were
+ * all quick ones". A run that lasts breaks the trailing streak by itself, so
+ * there is no separate flag that could drift out of sync with the log.
+ */
+export function shouldEase(deaths: DeathRecord[] = loadDeaths()): boolean {
+  if (!MERCY.enabled) return false;
+  if (deaths.length < MERCY.deathsToTrigger) return false;
+  return deaths
+    .slice(-MERCY.deathsToTrigger)
+    .every((d) => d.t < MERCY.quickDeathSeconds);
 }
 
 export type Stats = {
