@@ -4,7 +4,7 @@
 **Moonwick** — a hypercasual portrait game, one hand, 30-90 second sessions. A witch on a broomstick flies through a cursed forest at night. **Grazing obstacles charges her magic**: the trail lights up, the multiplier climbs, all the way to "Full Moon" (x5). Touching an obstacle = death. Restart in under a second.
 
 Decision criterion #1: *does the player want to replay immediately after losing?*
-Criterion #2: *does a new player understand within 10 seconds that they must graze, with no tutorial?*
+Criterion #2: *does a new player understand within 10 seconds that grazing is what scores, with no tutorial?*
 
 ## Stack
 - Phaser 3 + TypeScript + Vite. Target: 60 fps on a mid-range phone.
@@ -28,7 +28,7 @@ Hold = climb, release = descend. Gentle gravity, clamped speed.
 
 ### Death
 **Only by contact with an obstacle.** There is no other source of death in the game.
-- Lethal hitbox: a 10 px radius circle centred on the witch's TORSO — not on her drawing's bounding box — deliberately smaller than the visual (perceived generosity). Hat, cape and broom are never lethal. See "The witch".
+- Lethal hitbox: an 8 px radius circle centred on the witch's TORSO — not on her drawing's bounding box — deliberately smaller than the visual (perceived generosity). Hat, cape and broom are never lethal. See "The witch".
 - Death screen: contextual message + score + cause + run summary + score history + a giant Replay button. Restart < 300 ms. The replay tap must never be read as a flight input.
 - **Nothing on the death screen may delay replaying.** The tap is live on the very first frame: no delay guard, no timer, no mandatory animation. The message and the history are drawn synchronously in `die()`.
 
@@ -75,6 +75,76 @@ The last `HISTORY.size` (5) scores are kept in `moonwick:history` and shown on t
 - A "How to play" page (three pictograms: graze scores, touching kills, chaining multiplies) exists in the settings. It is **only ever opened on purpose** — nothing shows it automatically, and it never replaces the first-run onboarding.
 - Trail density and brightness are the primary indicator of the multiplier — the player should never have to read a number.
 - **READABILITY INVARIANT: obstacles and their graze halos are never darkened or degraded by any visual effect** (combo loss, tier transitions, Full Moon, and so on). The darkness overlay is drawn **under** the gameplay layer and only touches the background and scenery; combo loss is expressed through **desaturation and cooling** of the scenery (overlay capped at 0.5), and the moon rim on the obstacles **strengthens** as the light fades. This is the information the player needs most when at x1 — any future art direction must preserve this invariant.
+
+## Difficulty balance (IMPORTANT — this reversed an earlier pillar)
+
+Playtests said the game was too hard. The rebalance is tuning only: no mechanic
+changed.
+
+**Grazing is no longer compulsory.** The game used to guarantee that from The
+Brambles onwards half the gap was narrower than the graze ring, so crossing
+cleanly was *structurally impossible*. That is now **deliberately reversed**: at
+every tier, including The Wall and The Moon's Eye, a careful player can cross
+without ever entering the ring. A dev assertion in config.ts enforces it, and it
+is the exact inverse of the assertion that used to live there.
+
+What replaces the structural pressure is **economic**: only grazes score, and
+dark points decay to zero within a run (`SCORING.darkPointsSequence`). Playing
+safe is allowed and pays almost nothing. Measured clean corridor — the band
+where the witch is outside the ring on both sides — runs 169 px at The Edge down
+to 16 px at The Moon's Eye.
+
+Consequence to keep in mind: criterion #2 is now carried by the score feedback
+alone, not by the geometry. If playtests ever show new players never discovering
+grazing, that is where to look first.
+
+**`GLOBAL_SPEED`** (0.85) multiplies the scroll speed and DIVIDES the spawn
+interval. Distance between obstacles = speed x interval, so the course keeps its
+exact spatial layout and only time is stretched — one knob for the whole game's
+rhythm, with no tier redesign. It is why `spawnInterval` values in TIERS are
+authored *before* the factor, and why the fairness assertion checks the
+effective interval: otherwise `clampInterval` would silently cap it and the
+slowdown would stop applying at the widest tiers.
+
+**The Edge is a learning tier** (30 s, `gapSize` 250, slowest). A naive bot that
+merely aims at the middle of the next gap clears it 12/12.
+
+**Hitbox 8 px** (was 10), purely for perceived generosity. The graze ring is
+unchanged, so the ring simply starts closer to the witch.
+
+### Adaptive easing (`MERCY`)
+
+After 3 consecutive deaths under 12 s, the next run gets +15% `gapSize` and -10%
+speed. The help lifts mid-run as soon as the player passes 20 s.
+
+- **Totally invisible.** No message, no icon, no sound. A player being helped
+  must never be told, or the help becomes a judgement on their skill.
+- The trigger is **derived** from the death log, never stored: a long run breaks
+  the trailing streak of quick deaths by itself, so there is no second source of
+  truth to keep in sync.
+- It only touches the generator (`effectiveDiff()`), never `diffCurrent`, so the
+  sky, the tier announcement and the debug readout keep showing the real tier.
+- `MERCY.enabled` turns the whole thing off.
+
+### Death log and the tuning readout
+
+`moonwick:deaths` keeps the last 50 deaths: seconds survived, tier, cause,
+grazes. It is the source of truth for tuning, and what the adaptive easing is
+derived from.
+
+**Long press (700 ms) on the logo** opens a stats screen: median survival,
+median grazes, share of deaths under the quick-death threshold, cause split, and
+the death distribution per tier as bars. Tap anywhere to close.
+
+That screen is a DEBUG surface, like the `DEBUG_STATS` overlay: its labels are
+technical tokens and stay **out of i18n** — only tier names, which are keys, go
+through `t()`. It is the one documented exception to the no-literal-strings
+rule, and it exists because tuning against recorded deaths beats tuning against
+a hunch.
+
+Note the interaction with the home screen: on the logo the tap decision waits
+for the *release* (short press plays, long press opens the readout). Everywhere
+else the tap still starts the run on press, so the game keeps its instant feel.
 
 ### The witch (`src/witchShape.ts`)
 
@@ -130,7 +200,7 @@ Each silhouette is split into a **shaft** frame and a **tip** frame because they
 - [x] **P2 — Procedural**: varied obstacle generation, playable spacing, constant scroll.
 - [x] **P3 — Near-miss + death**: hitbox, graze zone, combo, score, instant restart.
 - [x] **P4 — Game feel**: combo-driven particles, light screen shake, slow motion on extreme grazes, Full Moon mode, synthesised Web Audio sounds.
-- [x] **P5 — Difficulty**: time-based tiers in `TIERS` (config.ts) — **The Edge** (0 s, `gapSize` 250), **The Dark Wood** (25 s, 140), **The Brambles** (50 s, 70), **The Wall** (80 s, 67), **The Moon's Eye** (120 s, 64 — final plateau: difficulty freezes, skill decides run length). Main lever = narrowing; speed rises moderately (220 -> 285 px/s). **From The Brambles onwards, half the gap width (worst-case jitter included) is < 38 px: crossing without grazing is structurally impossible** — the calculation is commented per tier in config.ts, and the generator places a trunk whenever no branch can be narrowed without becoming unreachable. Transitions: name shown ~1.5 s, parameters and sky interpolated over 2 s. Fairness constraint (`spawnInterval` < `MAGIC.max * 0.6`) guaranteed on every draw plus a dev assertion. `DEBUG_START_TIER` to start at a given tier. Each tier also carries an `essence` (tree species) — see "Obstacle rendering", rendering only.
+- [x] **P5 — Difficulty**: time-based tiers in `TIERS` (config.ts) — **The Edge** (0 s, `gapSize` 250), **The Dark Wood** (30 s, 170), **The Brambles** (55 s, 130), **The Wall** (85 s, 105), **The Moon's Eye** (125 s, 96 — final plateau: difficulty freezes, skill decides run length). Main lever = narrowing; speed rises moderately. **Crossing without grazing is possible at EVERY tier** (see "Difficulty balance"). Transitions: name shown ~1.5 s, parameters and sky interpolated over 2 s. Fairness constraint (`spawnInterval` < `MAGIC.max * 0.6`) guaranteed on every draw plus a dev assertion. `DEBUG_START_TIER` to start at a given tier. Each tier also carries an `essence` (tree species) — see "Obstacle rendering", rendering only.
 - [x] **P6 — Light meta**: `MenuScene` (logo, best score, full-screen tap, settings, animated scenery with a looping witch); localStorage persistence; enriched death screen (score, tier, best combo of the run, "New record!", **Replay** filling the bottom of the screen); **shareable score image** 1080x1920 generated on an off-screen canvas (Web Share API with a file, otherwise a PNG download); tutorial-free onboarding on the first run (exaggerated halo + graze word, gone for good after the first graze); **automatic pause** on `visibilitychange`/blur with resume on tap, and no death possible while away.
 - [ ] **P7 — Mobile**: Capacitor, iOS/Android builds, safe areas, haptics.
 - [ ] **P8 — Monetisation/analytics**: AdMob rewarded ("continue" once per run), interstitial at most every 3 runs, no-ads IAP.
@@ -177,6 +247,7 @@ Every key is prefixed `moonwick:` and handled in `src/save.ts` — never touch `
 | `moonwick:tutorialDone` | `"1"` after the first successful graze; hides onboarding forever |
 | `moonwick:lang` | `"en"` / `"fr"` / `"es"` / `"it"` — explicit choice in the settings, wins permanently over `navigator.language` |
 | `moonwick:history` | JSON array of the last `HISTORY.size` scores, oldest first. Malformed or hand-edited content degrades to an empty list, never throws |
+| `moonwick:deaths` | JSON array of the last `DEATHS.size` (50) deaths, oldest first: `{ t, tier, cause, grazes }`. Tuning source of truth, and what `MERCY` is derived from. Individual malformed entries are dropped rather than poisoning the list |
 
 ## Accessibility and quality (permanent floor)
 - `prefers-reduced-motion` honoured for screen shake and slow motion.

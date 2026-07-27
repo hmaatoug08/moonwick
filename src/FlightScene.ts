@@ -7,8 +7,10 @@ import {
   DEBUG_STATS,
   FEEDBACK,
   FULL_MOON,
+  GLOBAL_SPEED,
   HISTORY,
   MAGIC,
+  MERCY,
   MOON,
   MOON_EYE,
   NEAR_MISS,
@@ -26,7 +28,14 @@ import {
 } from "./config";
 import { DeathCategory, deathMessage, onLanguageChange, t } from "./i18n";
 import { Difficulty, Obstacle, ObstacleSpawner } from "./obstacles";
-import { isTutorialDone, markTutorialDone, recordRun } from "./save";
+import {
+  DeathCause,
+  isTutorialDone,
+  markTutorialDone,
+  pushDeath,
+  recordRun,
+  shouldEase
+} from "./save";
 import { shareScoreImage } from "./share";
 import { Sfx } from "./sfx";
 import { ensureTextures, LIGHT_KEY, LIGHT_SIZE, SPARK_KEY } from "./textures";
@@ -146,6 +155,16 @@ export class FlightScene extends Phaser.Scene {
   private deathTrail!: Phaser.GameObjects.Particles.ParticleEmitter;
   /** Best combo reached in the current run. */
   private bestComboThisRun = 0;
+  /** Grazes completed in the current run — logged for tuning. */
+  private grazesThisRun = 0;
+  /** What actually killed her, captured at the moment of contact. */
+  private deathCause: DeathCause = "branch";
+  /**
+   * Adaptive easing is on for this run. Decided at reset from the death log,
+   * lifted mid-run once the player clears MERCY.clearSeconds. Never surfaced
+   * to the player in any way.
+   */
+  private easing = false;
   /** Furthest tier reached in the current run. */
   private bestTierThisRun = 0;
   /** The last run beat the record (used by the share image). */
@@ -664,7 +683,9 @@ export class FlightScene extends Phaser.Scene {
       this.deathCategory === "newRecord" ? HISTORY.recordLabelColor : "#d9a7ff"
     );
 
-    this.deathCauseText.setText(t("death.causeBranch"));
+    this.deathCauseText.setText(
+      t(this.deathCause === "trunk" ? "death.causeTrunk" : "death.causeBranch")
+    );
     fitText(this.deathCauseText, WORLD.width - 48, 20);
 
     this.deathStatsText.setText(
@@ -726,8 +747,11 @@ export class FlightScene extends Phaser.Scene {
     this.combo = 0;
     this.darkStreak = 0;
     this.bestComboThisRun = 0;
+    this.grazesThisRun = 0;
     this.bestTierThisRun = 0;
     this.runDuration = 0;
+    // Read once per run, from the death log. Nothing tells the player.
+    this.easing = shouldEase();
     this.magic = MAGIC.max;
     this.flickerPhase = 0;
     this.slowMoLeft = 0;
@@ -799,17 +823,40 @@ export class FlightScene extends Phaser.Scene {
     this.teachText.setPosition(x, bandCenter).setVisible(true);
   }
 
+  /**
+   * A tier's authored values turned into effective ones.
+   *
+   * GLOBAL_SPEED multiplies the speed and DIVIDES the interval, so the course
+   * keeps its exact spatial layout and only time is stretched: the distance
+   * between two obstacles stays speed x interval. One knob slows the whole
+   * game down without redesigning a single tier.
+   */
   private tierParams(index: number): TierParams {
     const tier = TIERS[index];
     const sky = tierSky(tier);
     return {
-      speed: tier.scrollSpeed,
+      speed: tier.scrollSpeed * GLOBAL_SPEED,
       gapSize: tier.gapSize,
-      spawnInterval: tier.spawnInterval,
+      spawnInterval: tier.spawnInterval / GLOBAL_SPEED,
       essence: tier.essence,
       inverted: MOON_EYE.enabled && tier.invertContrast === true,
       skyTop: sky.top,
       skyBottom: sky.bottom
+    };
+  }
+
+  /**
+   * The parameters the generator actually gets: the current tier, plus the
+   * adaptive easing when it is on. Kept apart from `diffCurrent` so the sky,
+   * the tier announcement and the debug readout keep showing the real tier,
+   * and only the geometry is quietly relaxed.
+   */
+  private effectiveDiff(): TierParams {
+    if (!this.easing) return this.diffCurrent;
+    return {
+      ...this.diffCurrent,
+      gapSize: this.diffCurrent.gapSize * (1 + MERCY.gapBonus),
+      speed: this.diffCurrent.speed * (1 - MERCY.speedRelief)
     };
   }
 
@@ -831,6 +878,11 @@ export class FlightScene extends Phaser.Scene {
   private updateDifficulty(dt: number): void {
     this.runTime += dt;
     this.runDuration += dt;
+
+    // The adaptive help lifts the moment the player proves they no longer
+    // need it. Mid-run is deliberate: only obstacles generated from here on
+    // are normal-sized, so nothing changes shape in front of the player.
+    if (this.easing && this.runDuration >= MERCY.clearSeconds) this.easing = false;
 
     const target = this.tierIndexFor(this.runTime);
     this.bestTierThisRun = Math.max(this.bestTierThisRun, target);
@@ -998,6 +1050,15 @@ export class FlightScene extends Phaser.Scene {
     this.lastRunWasRecord = newBestScore;
     this.deathCategory = this.pickDeathCategory(newBestScore, previousBest);
 
+    // Tuning log. `runDuration` is real flown seconds, so DEBUG_START_TIER
+    // cannot pollute the measurement.
+    pushDeath({
+      t: Math.round(this.runDuration * 10) / 10,
+      tier: this.bestTierThisRun,
+      cause: this.deathCause,
+      grazes: this.grazesThisRun
+    });
+
     this.refreshDeathTexts();
     this.drawHistory(history);
 
@@ -1036,6 +1097,7 @@ export class FlightScene extends Phaser.Scene {
     }
 
     this.bestComboThisRun = Math.max(this.bestComboThisRun, this.combo);
+    this.grazesThisRun += 1;
 
     const points = Math.round(SCORING.grazePoints * this.multiplier);
     this.score += points;
@@ -1110,7 +1172,10 @@ export class FlightScene extends Phaser.Scene {
     for (const obstacle of this.spawner.all) {
       const d = obstacle.distanceTo(wx, wy);
 
-      if (d <= NEAR_MISS.deathRadius) return true;
+      if (d <= NEAR_MISS.deathRadius) {
+        this.deathCause = obstacle.kind === "trunk" ? "trunk" : "branch";
+        return true;
+      }
 
       const inZone = d <= NEAR_MISS.grazeRadius;
       // Exaggerated halo on the first run's onboarding obstacle.
@@ -1350,7 +1415,7 @@ export class FlightScene extends Phaser.Scene {
     this.updateDifficulty(dt);
 
     // --- Obstacles: generation + scrolling at the tier's pace.
-    this.spawner.update(dt, this.diffCurrent);
+    this.spawner.update(dt, this.effectiveDiff());
 
     // --- Near-miss, score, death. Only a collision can kill.
     if (this.updateNearMiss()) {
