@@ -6,6 +6,7 @@ import {
   DEBUG_START_TIER,
   DEBUG_STATS,
   FEEDBACK,
+  FIRST_GRAZE,
   FULL_MOON,
   GLOBAL_SPEED,
   HISTORY,
@@ -18,7 +19,6 @@ import {
   SCORING,
   SHAKE,
   SLOWMO,
-  TEACH,
   TIER_FX,
   TIERS,
   tierSky,
@@ -36,6 +36,7 @@ import {
   recordRun,
   shouldEase
 } from "./save";
+import { RewardCues } from "./rewardCues";
 import { shareScoreImage } from "./share";
 import { Sfx } from "./sfx";
 import { ensureTextures, LIGHT_KEY, LIGHT_SIZE, SPARK_KEY } from "./textures";
@@ -176,8 +177,9 @@ export class FlightScene extends Phaser.Scene {
   private lastDrawnCombo = -1;
 
   /** First-run onboarding: active until the first successful graze. */
-  private teaching = false;
-  private teachText!: Phaser.GameObjects.Text;
+  /** This run is the player's first ever: the first graze gets celebrated once. */
+  private firstGrazeEver = false;
+  private cues!: RewardCues;
 
   /** Pause (tab in the background): the world is frozen, you cannot die. */
   private paused = false;
@@ -288,17 +290,11 @@ export class FlightScene extends Phaser.Scene {
       .setDepth(21)
       .setAlpha(0);
 
-    // Onboarding word: follows the first obstacle of the very first run.
-    this.teachText = this.add
-      .text(0, 0, "", {
-        fontFamily: "sans-serif",
-        fontStyle: "bold",
-        fontSize: `${TEACH.fontSizePx}px`,
-        color: TEACH.color
-      })
-      .setOrigin(0.5)
-      .setDepth(21)
-      .setVisible(false);
+    // Reward cues: fireflies in the graze ring and the value tag. They replaced
+    // the onboarding word — no instruction text exists during play any more.
+    // Just above the obstacles (3) so the halo does not swallow them, below the
+    // trail (4) and the witch (5).
+    this.cues = new RewardCues(this, 3.5);
 
     this.buildHud();
     this.buildDeathScene();
@@ -653,8 +649,6 @@ export class FlightScene extends Phaser.Scene {
     this.pauseHintText.setText(t("pause.hint"));
     fitText(this.pauseHintText, WORLD.width - 48, 24);
 
-    this.teachText.setText(t("teach.word"));
-    fitText(this.teachText, WORLD.width * 0.6, TEACH.fontSizePx);
 
     // A tier name currently being announced changes language too.
     if (this.tierText.alpha > 0) {
@@ -780,8 +774,8 @@ export class FlightScene extends Phaser.Scene {
 
     // Onboarding: only while the first graze has never succeeded (this
     // persists across runs within the first session).
-    this.teaching = !isTutorialDone();
-    this.teachText.setVisible(false);
+    this.firstGrazeEver = !isTutorialDone();
+    this.cues.reset();
 
     this.setFullMoon(false, true);
     this.refreshHud();
@@ -797,30 +791,6 @@ export class FlightScene extends Phaser.Scene {
       bestCombo: this.bestComboThisRun,
       isRecord: this.lastRunWasRecord
     });
-  }
-
-  /** The obstacle carrying the onboarding: the oldest one still to be grazed. */
-  private get teachTarget(): Obstacle | null {
-    if (!this.teaching) return null;
-    for (const obstacle of this.spawner.all) {
-      if (!obstacle.grazed && !obstacle.passed) return obstacle;
-    }
-    return null;
-  }
-
-  /** The graze word follows the target obstacle, centred on its gap. */
-  private updateTeach(): void {
-    const target = this.teachTarget;
-    if (!target) {
-      this.teachText.setVisible(false);
-      return;
-    }
-    const bandCenter =
-      (Math.max(target.gapTop, 0) + Math.min(target.gapBottom, WORLD.height)) / 2;
-    // Clamped against the REAL width of the translated word ("SFIORA" is much
-    // wider than "ROZA"): it never leaves the screen, in any language.
-    const x = Math.max(this.teachText.width / 2 + 10, target.x + TEACH.offsetX);
-    this.teachText.setPosition(x, bandCenter).setVisible(true);
   }
 
   /**
@@ -1088,12 +1058,12 @@ export class FlightScene extends Phaser.Scene {
     // from the beginning of the decaying points sequence.
     this.darkStreak = 0;
 
-    // First successful graze ever: the onboarding disappears for good (no
-    // text, no popup — it is simply no longer needed).
-    if (this.teaching) {
-      this.teaching = false;
-      this.teachText.setVisible(false);
+    // The very first graze ever: celebrated once, wordlessly. This is the
+    // moment the game clicks, and it never happens again.
+    if (this.firstGrazeEver) {
+      this.firstGrazeEver = false;
       markTutorialDone();
+      this.celebrateFirstGraze(obstacle.grazeX, obstacle.grazeY);
     }
 
     this.bestComboThisRun = Math.max(this.bestComboThisRun, this.combo);
@@ -1178,16 +1148,8 @@ export class FlightScene extends Phaser.Scene {
       }
 
       const inZone = d <= NEAR_MISS.grazeRadius;
-      // Exaggerated halo on the first run's onboarding obstacle.
-      const teach = this.teaching && obstacle === this.teachTarget;
       obstacle.halo.setAlpha(
-        (inZone
-          ? teach
-            ? TEACH.haloAlphaActive
-            : FEEDBACK.haloAlphaActive
-          : teach
-            ? TEACH.haloAlpha
-            : FEEDBACK.haloAlpha) * obstacle.haloAlphaScale
+        (inZone ? FEEDBACK.haloAlphaActive : FEEDBACK.haloAlpha) * obstacle.haloAlphaScale
       );
       // Readability invariant: outline strengthened as the light fades.
       obstacle.setContrast(this.obstacleStrokeAlpha);
@@ -1199,6 +1161,8 @@ export class FlightScene extends Phaser.Scene {
           if (!obstacle.grazeEntered) {
             obstacle.grazeEntered = true;
             this.onGrazeEnter();
+            // The fireflies she came for rush in. Visual only: no points.
+            if (this.cues.collect(obstacle)) this.sfx.spark();
           }
         }
         // Remember the closest point: that is where the text will pop up.
@@ -1222,7 +1186,12 @@ export class FlightScene extends Phaser.Scene {
         if (obstacle.inGrazeZone && !obstacle.grazed) {
           obstacle.grazed = true;
           this.onGrazeExit(obstacle);
-        } else if (!obstacle.grazed && this.combo === 0) {
+        }
+        // Passed without grazing: the fireflies drift off and go out. The loss
+        // is shown, never commented on.
+        if (!obstacle.grazed) this.cues.release(obstacle);
+
+        if (!obstacle.grazed && this.combo === 0) {
           // Decaying DARK_POINTS: the Nth obstacle of the run through the dark
           // awards the Nth value of the sequence, then 0.
           // Combo active -> nothing: only grazes score.
@@ -1431,11 +1400,52 @@ export class FlightScene extends Phaser.Scene {
     this.flickerPhase = this.flickering ? this.flickerPhase + dt : 0;
     this.updateFlicker();
 
+    // Reward cues last: they follow the obstacles and the witch, so they read
+    // this frame's positions rather than the previous one's.
+    this.cues.sync(this.spawner.all);
+    this.cues.update(dt, time, this.witch.x, this.witch.y, this.multiplier);
+
     this.refreshHud();
     this.refreshMagic();
     this.applyAmbiance();
-    if (this.teaching) this.updateTeach();
     if (DEBUG_HITBOX) this.drawDebug();
+  }
+
+  /**
+   * The first graze ever, celebrated once and without a single word: a golden
+   * flash, a burst of sparks and a beat of slow motion. It fires on the exact
+   * frame the player discovers what the game is about.
+   */
+  private celebrateFirstGraze(x: number, y: number): void {
+    if (!this.reducedMotion) this.slowMoLeft = FIRST_GRAZE.slowMoMs / 1000;
+
+    const flash = this.add
+      .rectangle(0, 0, WORLD.width, WORLD.height, FULL_MOON.veilColor, 1)
+      .setOrigin(0, 0)
+      .setAlpha(FIRST_GRAZE.flashAlpha)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(14);
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      duration: FIRST_GRAZE.flashMs,
+      ease: "Quad.easeOut",
+      onComplete: () => flash.destroy()
+    });
+
+    const burst = this.add.particles(x, y, SPARK_KEY, {
+      speed: { min: 60, max: 240 },
+      lifespan: 700,
+      scale: 0.5,
+      alpha: { start: 0.95, end: 0 },
+      tint: FULL_MOON.witchColor,
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false
+    });
+    burst.setDepth(6);
+    burst.explode(FIRST_GRAZE.sparks);
+    // One-shot: the emitter goes away with its last particle.
+    this.time.delayedCall(900, () => burst.destroy());
   }
 }
 

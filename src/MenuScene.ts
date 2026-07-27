@@ -4,8 +4,10 @@ import {
   BRAND,
   FEEDBACK,
   DEATHS,
+  FIREFLIES,
   FULL_MOON,
   MERCY,
+  NEAR_MISS,
   OBSTACLE_ART,
   TIERS,
   TRAIL,
@@ -30,8 +32,18 @@ import { buttonWidth, fitText } from "./ui";
 /** How long the logo must be held to open the tuning readout. */
 const LONG_PRESS_MS = 700;
 
+/** Minimum touch target, per the usual mobile accessibility floor. */
+const MIN_TOUCH_PX = 44;
+
 export class MenuScene extends Phaser.Scene {
   private demoWitch!: Witch;
+  /** The branch she grazes on a loop, and the state of that loop. */
+  private demoBranch!: { x: number; tipY: number; halfWidth: number };
+  private demoTrail!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private demoFlies!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private demoGrazing = false;
+  /** 1 right after a graze, decaying to 0: drives the trail blaze. */
+  private demoBlaze = 0;
 
   private titleText!: Phaser.GameObjects.Text;
   private brandGlow!: Phaser.GameObjects.Image;
@@ -40,6 +52,7 @@ export class MenuScene extends Phaser.Scene {
 
   private settingsPanel!: Phaser.GameObjects.Container;
   private gearIcon!: Phaser.GameObjects.Graphics;
+  private gearLabel!: Phaser.GameObjects.Text;
   private settingsOpen = false;
   private gearZone!: Phaser.Geom.Rectangle;
   private backZone!: Phaser.Geom.Rectangle;
@@ -104,20 +117,52 @@ export class MenuScene extends Phaser.Scene {
       })
       .setDepth(1);
 
-    // Demo witch, with the golden trail of a great run.
-    const trail = this.add.particles(0, 0, SPARK_KEY, {
-      frequency: 14,
-      lifespan: 520,
+    // A branch for the demo witch to graze, with its halo and its fireflies.
+    // The home screen is the first thing a player ever sees, so it shows the
+    // reward loop rather than describing it: she skims the ring, the fireflies
+    // come to her, the trail blazes.
+    // Anchored at the BOTTOM: a top branch would run its halo straight through
+    // the logo and the best score. Its tip sits ~20 px under the lowest point
+    // of her loop, which is a graze and never a hit.
+    this.demoBranch = { x: WORLD.width * 0.63, tipY: WORLD.height * 0.575, halfWidth: 13 };
+    const branchArt = this.add.graphics().setDepth(3);
+    const drawBar = (color: number, alpha: number, half: number) => {
+      branchArt.fillStyle(color, alpha);
+      branchArt.fillRoundedRect(
+        this.demoBranch.x - half,
+        this.demoBranch.tipY - half,
+        half * 2,
+        WORLD.height - this.demoBranch.tipY + half * 2,
+        half
+      );
+    };
+    drawBar(FEEDBACK.haloColor, FEEDBACK.haloAlpha, this.demoBranch.halfWidth + NEAR_MISS.grazeRadius);
+    drawBar(OBSTACLE_ART.bodyColor, 1, this.demoBranch.halfWidth);
+
+    this.demoTrail = this.add.particles(0, 0, SPARK_KEY, {
+      frequency: TRAIL.frequencyIdle,
+      lifespan: TRAIL.lifespanIdle,
       speed: { min: TRAIL.driftMin, max: TRAIL.driftMax },
       angle: { min: 180 - TRAIL.spreadDeg, max: 180 + TRAIL.spreadDeg },
-      scale: 0.6,
-      alpha: { start: 0.7, end: 0 },
-      tint: TRAIL.colorMax,
+      scale: TRAIL.scaleIdle,
+      alpha: { start: TRAIL.alphaIdle, end: 0 },
+      tint: TRAIL.colorIdle,
       blendMode: Phaser.BlendModes.ADD
     });
-    trail.setDepth(4);
+    this.demoTrail.setDepth(4);
     this.demoWitch = new Witch(this, WORLD.width * 0.5, WORLD.height * 0.47, 5);
-    trail.startFollow(this.demoWitch.follow, TRAIL.offsetX, 0);
+    this.demoTrail.startFollow(this.demoWitch.follow, TRAIL.offsetX, 0);
+
+    this.demoFlies = this.add.particles(0, 0, SPARK_KEY, {
+      speed: { min: 30, max: 90 },
+      lifespan: 500,
+      scale: 0.4,
+      alpha: { start: 0.9, end: 0 },
+      tint: FIREFLIES.color,
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false
+    });
+    this.demoFlies.setDepth(4);
 
     this.buildHome();
     this.buildSettings();
@@ -210,9 +255,32 @@ export class MenuScene extends Phaser.Scene {
       gear.lineTo(gx + Math.cos(a) * 20, gy + Math.sin(a) * 20);
       gear.strokePath();
     }
-    // Generous touch target around the icon.
+    // The icon alone was ambiguous, so it now carries its label. The text goes
+    // through i18n like any interface string; only the drawn gear does not.
+    this.gearLabel = this.add
+      .text(gx + 30, gy, "", {
+        fontFamily: "sans-serif",
+        fontStyle: "bold",
+        fontSize: "18px",
+        color: "#8877aa"
+      })
+      .setOrigin(0, 0.5)
+      .setDepth(20);
+
+    // Touch target covering icon AND label, never under the 44 px floor.
+    // Sized in refreshTexts(), where the translated label's width is known.
     this.gearZone = new Phaser.Geom.Rectangle(0, 0, 84, 86);
     this.gearIcon = gear;
+  }
+
+  /**
+   * The settings hit area follows the translated label: "Réglages" and
+   * "Impostazioni" are far from the same width, and the zone must cover both
+   * without ever dropping under the 44 px touch floor.
+   */
+  private refreshGearZone(): void {
+    const right = this.gearLabel.x + this.gearLabel.width + 14;
+    this.gearZone.setTo(0, 0, Math.max(MIN_TOUCH_PX, right), Math.max(MIN_TOUCH_PX, 86));
   }
 
   /**
@@ -225,6 +293,7 @@ export class MenuScene extends Phaser.Scene {
     this.bestText.setVisible(on && loadStats().bestScore > 0);
     this.playText.setVisible(on);
     this.gearIcon.setVisible(on);
+    this.gearLabel.setVisible(on);
   }
 
   private buildSettings(): void {
@@ -468,6 +537,10 @@ export class MenuScene extends Phaser.Scene {
     this.playText.setText(t("menu.play"));
     fitText(this.playText, WORLD.width - 48, 30);
 
+    this.gearLabel.setText(t("settings.title"));
+    fitText(this.gearLabel, WORLD.width - this.gearLabel.x - 16, 18);
+    this.refreshGearZone();
+
     this.settingsTitleText.setText(t("settings.title"));
     fitText(this.settingsTitleText, WORLD.width - 48, 44);
     this.langLabelText.setText(t("settings.language"));
@@ -681,6 +754,39 @@ export class MenuScene extends Phaser.Scene {
     const vy = (y - this.demoWitch.y) / Math.max(dt, 1 / 240);
     this.demoWitch.x = WORLD.width * 0.5 + Math.sin(t2 * 0.9) * WORLD.width * 0.3;
     this.demoWitch.y = y;
-    this.demoWitch.update(dt, vy, WITCH.maxSpeed, 0);
+
+    // Distance to the demo branch's surface, the same point-to-capsule measure
+    // the real game uses — so what the home screen shows is what the game does.
+    const dx = Math.abs(this.demoWitch.x - this.demoBranch.x);
+    // The branch hangs DOWNWARD from its tip, so only being above it counts.
+    const dy = Math.max(0, this.demoBranch.tipY - this.demoWitch.y);
+    const distance = Math.hypot(Math.max(0, dx - this.demoBranch.halfWidth), dy);
+    const grazing = distance <= NEAR_MISS.grazeRadius && distance > NEAR_MISS.deathRadius;
+
+    if (grazing && !this.demoGrazing) {
+      // Entering the ring: the fireflies come in and the trail catches fire.
+      this.demoFlies.emitParticleAt(this.demoWitch.x, this.demoWitch.y, 8);
+      this.demoBlaze = 1;
+    }
+    this.demoGrazing = grazing;
+
+    // The blaze decays, so the trail is dull between passes and gold on them:
+    // the multiplier reads on the trail here exactly as it does in game.
+    this.demoBlaze = Math.max(0, this.demoBlaze - dt / 1.6);
+    const k = this.demoBlaze;
+    this.demoTrail.frequency = Phaser.Math.Linear(TRAIL.frequencyIdle, TRAIL.frequencyMax, k);
+    this.demoTrail.setParticleTint(
+      Phaser.Display.Color.ObjectToColor(
+        Phaser.Display.Color.Interpolate.ColorWithColor(
+          Phaser.Display.Color.ValueToColor(TRAIL.colorIdle),
+          Phaser.Display.Color.ValueToColor(TRAIL.colorMax),
+          100,
+          Math.round(k * 100)
+        )
+      ).color
+    );
+    this.demoTrail.setParticleAlpha({ start: Phaser.Math.Linear(TRAIL.alphaIdle, TRAIL.alphaMax, k), end: 0 });
+
+    this.demoWitch.update(dt, vy, WITCH.maxSpeed, k);
   }
 }

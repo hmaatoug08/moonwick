@@ -15,6 +15,14 @@ radius, the tier parameters and the generator are untouched.
 
 ### Added
 
+**Reward cues, replacing the tutorial** (`src/rewardCues.ts`)
+- Fireflies: two or three per obstacle, floating in the graze ring, collected into the witch with a crystalline chime when she enters it. Purely visual — they never score a point. They are bait placed exactly where the reward is.
+- Value tag: what the obstacle is worth at the current multiplier, small, on the edge of its halo, fading in as she approaches.
+- Visible loss: an obstacle passed without a graze lets its fireflies drift up and go out over 400 ms. Discreet, never mocking.
+- The first graze ever is celebrated once, wordlessly: golden flash, spark burst and a beat of slow motion.
+- The home screen now shows the loop instead of describing it — the demo witch grazes a branch repeatedly, the fireflies come to her and the trail catches fire.
+- Everything is pooled: obstacles spawn every couple of seconds for a whole run, and per-obstacle allocation would feed the GC inside a 60 fps loop.
+
 **Balance instrumentation**
 - Death log in `moonwick:deaths`: the last 50 deaths, each with seconds survived, tier, cause and grazes completed. The tuning source of truth.
 - Tuning readout, opened by a long press on the logo: median survival, median grazes, share of deaths under the quick-death threshold, cause split, and the death distribution per tier as bars. A debug surface, deliberately outside i18n.
@@ -59,6 +67,8 @@ radius, the tier parameters and the generator are untouched.
 
 ### Removed
 
+- **The tutorial approach.** The "GRAZE" word beside the first obstacle, its exaggerated halo, and the help repeated every run until the player finally managed one. Instructions explained the rule; the reward cues above show what there is to gain. The `teach.word` string is gone from all four languages.
+- **All instruction text during play.** The only text a live run shows is numeric: score, multiplier, floating gains, value tag.
 - The witch's scale-squash deformation, replaced by a real rotation.
 - `RESTART.minDeathMs`, the 100 ms guard before the replay tap was accepted: nothing may delay replaying.
 - The `death.newRecord` label, folded into the contextual message, which turns gold on a record.
@@ -70,6 +80,7 @@ radius, the tier parameters and the generator are untouched.
 - The rounded end of an obstacle's hitbox was only covered by an antialiased edge; the cap is now inflated by a safety margin, since at the apex the limiting direction is along the axis rather than across it.
 - The witch's aura was sized as a multiple of the 256 px light texture, which floodlit the screen at Full Moon instead of rimming her; it is now sized in pixels.
 - The witch's hat was clipped by the top of the screen whenever the player held a climb into the ceiling; it is now sized against `WITCH.marginTop`.
+- The settings gear was an unlabelled icon: it now carries its translated label, with a hit area sized from that label and never under the 44 px touch floor.
 - The death screen always said "You hit a branch", even after hitting a trunk: the real cause is now captured at the moment of contact, and `death.causeTrunk` was added in all four languages.
 - The "How to play" hit zone overlapped the "Back" button in the settings.
 - The settings panel showed through the help page.

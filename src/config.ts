@@ -587,7 +587,12 @@ export const SFX = {
   // Low impact on death.
   deathFromHz: 140,
   deathToHz: 38,
-  deathMs: 620
+  deathMs: 620,
+  // Firefly pickup: a short crystalline chime, two partials, fast decay.
+  sparkHz: 1180,
+  sparkPartialRatio: 2.5,
+  sparkMs: 190,
+  sparkGain: 0.5
 } as const;
 
 /**
@@ -595,14 +600,77 @@ export const SFX = {
  * exaggerated halo and the graze word. Gone forever after the first
  * successful graze. No popup, nothing to skip.
  */
-export const TEACH = {
-  haloAlpha: 0.5,
-  haloAlphaActive: 0.85,
-  // The word itself comes from i18n (key "teach.word"): no hard-coded label.
-  fontSizePx: 34,
-  color: "#f2c8ff",
-  // Word placement: left of the obstacle, centred on its gap.
-  offsetX: -96
+/**
+ * Reward cues — how the game says "grazing pays" WITHOUT a single word.
+ *
+ * This replaced the tutorial approach (a "GRAZE" band next to the first
+ * obstacle, repeated until the player succeeded). Instructions told players
+ * what to do; these show them what they gain. No text appears during play any
+ * more except the numeric gains themselves.
+ *
+ * Fireflies are PURELY VISUAL: they never add to the score. They exist to put
+ * something worth wanting inside the graze ring, so the eye goes there.
+ */
+export const FIREFLIES = {
+  /** Per obstacle. Kept low: this is bait, not confetti. */
+  minPerObstacle: 2,
+  maxPerObstacle: 3,
+  /**
+   * Where they float, as a distance from the obstacle SURFACE. Inside the
+   * graze ring with a margin at both ends: never so close that reaching one
+   * means dying, never outside the ring it is advertising.
+   */
+  ringMin: 16,
+  ringMax: 32,
+  /** Idle drift. */
+  driftPx: 3.5,
+  driftHz: 0.55,
+  pulseHz: 1.1,
+  sizeMin: 7,
+  sizeMax: 11,
+  color: 0xffe9a8,
+  alphaIdle: 0.55,
+  alphaPeak: 0.95,
+  /** Absorption into the witch when she enters the ring. */
+  collectMs: 220,
+  /** Escape when the obstacle is passed without a graze. Never mocking. */
+  escapeMs: 400,
+  escapeRise: 54,
+  /** Pool size: enough for every obstacle on screen plus those in flight. */
+  poolSize: 40
+} as const;
+
+/**
+ * The value tag: what this obstacle is worth at the CURRENT multiplier, shown
+ * small on the edge of its halo. It is the whole economic argument for grazing,
+ * so it fades in as the witch approaches and disappears once earned.
+ */
+export const VALUE_TAG = {
+  fontSizePx: 15,
+  color: "#ffe9a8",
+  /**
+   * Horizontal offset from the obstacle axis. NEGATIVE on purpose: obstacles
+   * scroll towards the witch, so the side facing her is the left one. Put the
+   * tag on the far side and she only reads it once the decision is behind her.
+   */
+  offsetX: -26,
+  /** Distance at which it starts fading in / reaches full strength. */
+  fadeInFromX: 330,
+  fullAtX: 150,
+  alphaMin: 0.18,
+  alphaMax: 0.95,
+  poolSize: 8
+} as const;
+
+/**
+ * The very first graze EVER is celebrated once, wordlessly: this is the moment
+ * the whole game clicks. Never repeated — `moonwick:tutorialDone` gates it.
+ */
+export const FIRST_GRAZE = {
+  slowMoMs: 260,
+  flashAlpha: 0.22,
+  flashMs: 420,
+  sparks: 26
 } as const;
 
 // NOTE: there is deliberately no delay before the death screen accepts the
