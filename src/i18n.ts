@@ -47,8 +47,9 @@ const EN = {
   "pause.title": "Paused",
   "pause.hint": "Tap to resume",
 
-  "teach.word": "GRAZE",
-  "float.graze": "GRAZED! +{points}",
+  // Numbers only: no word may appear during play (see CLAUDE.md, reward cues).
+  // Kept as a key so the format stays in one place, per language.
+  "float.graze": "+{points}",
 
   "share.newRecord": "NEW RECORD",
   "share.bestCombo": "Best combo · {combo}",
@@ -92,8 +93,7 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "pause.title": "En pause",
     "pause.hint": "Tape pour reprendre",
 
-    "teach.word": "FRÔLE",
-    "float.graze": "FRÔLÉ ! +{points}",
+    "float.graze": "+{points}",
 
     "share.newRecord": "NOUVEAU RECORD",
     "share.bestCombo": "Meilleur combo · {combo}",
@@ -132,8 +132,7 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "pause.title": "En pausa",
     "pause.hint": "Toca para continuar",
 
-    "teach.word": "ROZA",
-    "float.graze": "¡ROZADO! +{points}",
+    "float.graze": "+{points}",
 
     "share.newRecord": "NUEVO RÉCORD",
     "share.bestCombo": "Mejor combo · {combo}",
@@ -172,8 +171,7 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "pause.title": "In pausa",
     "pause.hint": "Tocca per riprendere",
 
-    "teach.word": "SFIORA",
-    "float.graze": "SFIORATO! +{points}",
+    "float.graze": "+{points}",
 
     "share.newRecord": "NUOVO RECORD",
     "share.bestCombo": "Miglior combo · {combo}",

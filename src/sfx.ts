@@ -101,4 +101,34 @@ export class Sfx {
     osc.start(now);
     osc.stop(now + duration + 0.02);
   }
+
+  /**
+   * Firefly pickup: a short crystalline chime. Two sine partials and a fast
+   * decay — it fires on every graze, so it has to sit under the swoosh rather
+   * than compete with it.
+   */
+  spark(): void {
+    if (!isSoundEnabled()) return;
+    const ctx = this.ensureContext();
+    if (!ctx || !this.master || ctx.state !== "running") return;
+
+    const now = ctx.currentTime;
+    const duration = SFX.sparkMs / 1000;
+
+    for (const ratio of [1, SFX.sparkPartialRatio]) {
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(SFX.sparkHz * ratio, now);
+
+      const gain = ctx.createGain();
+      const peak = SFX.sparkGain / ratio;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(peak, now + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+      osc.connect(gain).connect(this.master);
+      osc.start(now);
+      osc.stop(now + duration + 0.02);
+    }
+  }
 }

@@ -72,7 +72,49 @@ The last `HISTORY.size` (5) scores are kept in `moonwick:history` and shown on t
 
 ### Affordance
 - The graze zone is drawn as a translucent violet halo **around every obstacle** (alpha 0.15, -> 0.5 when the witch is inside). It is the main teacher of the rule.
-- A "How to play" page (three pictograms: graze scores, touching kills, chaining multiplies) exists in the settings. It is **only ever opened on purpose** — nothing shows it automatically, and it never replaces the first-run onboarding.
+- A "How to play" page (three pictograms: graze scores, touching kills, chaining multiplies) exists in the settings. It is **only ever opened on purpose** — nothing shows it automatically.
+
+### Communicating the reward, not the rule (IMPORTANT — replaced the tutorial)
+
+The game used to teach with an instruction: a "GRAZE" band beside the first
+obstacle, repeated every run until the player finally managed one. That is
+**gone**. Telling players what to do explains a rule; showing them what they
+gain makes them want it. `src/rewardCues.ts` holds the replacement.
+
+**NO WORDS DURING PLAY.** The only text visible in a live run is numeric: the
+score, the multiplier, the floating gains and the value tag. Anything that
+reads as an instruction is a bug. (The one non-numeric string that can still
+appear is the tier name at a tier change — atmosphere and progression, not
+instruction. If that should go too, it lives in `announceTier`.)
+
+- **Fireflies.** Two or three per obstacle, floating in the graze ring with a
+  slow drift, collected into the witch with a crystalline chime when she enters
+  it. They are **purely visual and never score a point** — bait placed exactly
+  where the reward is, so the eye goes there by itself. A dev assertion keeps
+  them strictly inside the ring: outside it they would advertise a reward that
+  is not there, closer than the lethal radius they would bait her into dying.
+- **Value tag.** What this obstacle is worth at the CURRENT multiplier, small,
+  on the edge of its halo, fading in as she closes. It is the whole economic
+  argument for grazing, which is what carries the game now that the geometry no
+  longer forces it (see "Difficulty balance"). It sits on the obstacle's LEFT —
+  obstacles scroll towards her, so that is the side she reads before deciding.
+- **Visible loss.** An obstacle passed without a graze lets its fireflies drift
+  up and go out over ~400 ms. Discreet, never mocking: the loss is shown, not
+  commented on.
+- **The first graze ever** is celebrated once and wordlessly — golden flash,
+  spark burst, a beat of slow motion. `moonwick:tutorialDone` makes sure it
+  never happens twice.
+- **The home screen shows the loop.** The demo witch grazes a branch on a loop:
+  fireflies come to her and the trail catches fire, then dulls again. It uses
+  the same point-to-capsule distance as the real game, so what the home screen
+  promises is what the game does.
+
+Everything is **pooled** (`FIREFLIES.poolSize`, `VALUE_TAG.poolSize`).
+Obstacles spawn every ~2 s for a whole run; allocating sprites per obstacle
+would feed the GC in the middle of a 60 fps loop. Attachment is tracked in a
+`WeakSet` of obstacles rather than inferred from live fireflies — the moment
+they are collected they leave their obstacle, and anything asking "does this
+obstacle still have fireflies?" would hand it a fresh set, paying out forever.
 - Trail density and brightness are the primary indicator of the multiplier — the player should never have to read a number.
 - **READABILITY INVARIANT: obstacles and their graze halos are never darkened or degraded by any visual effect** (combo loss, tier transitions, Full Moon, and so on). The darkness overlay is drawn **under** the gameplay layer and only touches the background and scenery; combo loss is expressed through **desaturation and cooling** of the scenery (overlay capped at 0.5), and the moon rim on the obstacles **strengthens** as the light fades. This is the information the player needs most when at x1 — any future art direction must preserve this invariant.
 
@@ -201,7 +243,7 @@ Each silhouette is split into a **shaft** frame and a **tip** frame because they
 - [x] **P3 — Near-miss + death**: hitbox, graze zone, combo, score, instant restart.
 - [x] **P4 — Game feel**: combo-driven particles, light screen shake, slow motion on extreme grazes, Full Moon mode, synthesised Web Audio sounds.
 - [x] **P5 — Difficulty**: time-based tiers in `TIERS` (config.ts) — **The Edge** (0 s, `gapSize` 250), **The Dark Wood** (30 s, 170), **The Brambles** (55 s, 130), **The Wall** (85 s, 105), **The Moon's Eye** (125 s, 96 — final plateau: difficulty freezes, skill decides run length). Main lever = narrowing; speed rises moderately. **Crossing without grazing is possible at EVERY tier** (see "Difficulty balance"). Transitions: name shown ~1.5 s, parameters and sky interpolated over 2 s. Fairness constraint (`spawnInterval` < `MAGIC.max * 0.6`) guaranteed on every draw plus a dev assertion. `DEBUG_START_TIER` to start at a given tier. Each tier also carries an `essence` (tree species) — see "Obstacle rendering", rendering only.
-- [x] **P6 — Light meta**: `MenuScene` (logo, best score, full-screen tap, settings, animated scenery with a looping witch); localStorage persistence; enriched death screen (score, tier, best combo of the run, "New record!", **Replay** filling the bottom of the screen); **shareable score image** 1080x1920 generated on an off-screen canvas (Web Share API with a file, otherwise a PNG download); tutorial-free onboarding on the first run (exaggerated halo + graze word, gone for good after the first graze); **automatic pause** on `visibilitychange`/blur with resume on tap, and no death possible while away.
+- [x] **P6 — Light meta**: `MenuScene` (logo, best score, full-screen tap, settings, animated scenery with a looping witch); localStorage persistence; enriched death screen (score, tier, best combo of the run, "New record!", **Replay** filling the bottom of the screen); **shareable score image** 1080x1920 generated on an off-screen canvas (Web Share API with a file, otherwise a PNG download); reward cues instead of a tutorial (see "Communicating the reward"); **automatic pause** on `visibilitychange`/blur with resume on tap, and no death possible while away.
 - [ ] **P7 — Mobile**: Capacitor, iOS/Android builds, safe areas, haptics.
 - [ ] **P8 — Monetisation/analytics**: AdMob rewarded ("continue" once per run), interstitial at most every 3 runs, no-ads IAP.
 
@@ -216,15 +258,15 @@ Each silhouette is split into a **shaft** frame and a **tip** frame because they
 Supported languages: **English, Français, Español, Italiano**. Everything lives in `src/i18n.ts`.
 
 - **Only exception: the brand name "Moonwick"** (`BRAND.name`), identical in all four languages.
-- **ABSOLUTE RULE: no other literal display string in the scenes.** Menu, settings, death screen, pause screen, first-run onboarding, floating texts, tier names and the share image *all* go through `t("key")`. The only literals allowed in scenes are technical tokens (`"sans-serif"`, `"bold"`, scene keys, texture keys).
+- **ABSOLUTE RULE: no other literal display string in the scenes.** Menu, settings, death screen, pause screen, floating texts, tier names and the share image *all* go through `t("key")`. The only literals allowed in scenes are technical tokens (`"sans-serif"`, `"bold"`, scene keys, texture keys).
 - Tier names are keys, not labels: `TIERS[i].nameKey` (`tier.edge`, `tier.darkwood`, `tier.brambles`, `tier.wall`, `tier.moonEye`).
 - English is authoritative for keys: `STRINGS.fr/es/it` are typed against it, so **a forgotten key breaks the build**.
 - `t(key, params)` interpolates `{parameters}`. `tAll(key)` returns all 4 translations — used for sizing.
 - `setLanguage(lang)` persists and notifies subscribers (`onLanguageChange`): scenes refresh **immediately, with no reload**. Any scene displaying text must subscribe in `create()` and unsubscribe on `SHUTDOWN`.
 - Detection on first launch via `navigator.language` (primary subtag, falling back to `en`). **The player's explicit choice wins permanently.**
-- Settings reachable from the home screen via the gear icon: language selector (native names) + sound toggle + back button.
+- Settings reachable from the home screen via the gear icon, which carries its **translated label** beside it: language selector (native names) + sound toggle + back button. The hit area is sized from the translated label and never drops under the 44 px touch floor (`refreshGearZone()`).
 - `DEBUG_FORCE_LANG` (config.ts) forces a language for testing, without touching the browser or the persisted choice.
-- `DEBUG_RESET_TUTORIAL` (config.ts) clears only `moonwick:tutorialDone` on boot, so the first-run graze hint can be replayed without wiping scores, settings or history.
+- `DEBUG_RESET_TUTORIAL` (config.ts) clears only `moonwick:tutorialDone` on boot, so the first-graze celebration can be replayed without wiping scores, settings or history.
 - Death messages are **not** part of `STRINGS`: they live in `DEATH_MESSAGES`, typed `Record<Lang, Record<DeathCategory, string[]>>`, so a missing language or category still breaks the build. `es` and `it` currently hold the English copy behind a `TODO` comment, pending native writing.
 
 ### Multilingual layout (permanent floor)
@@ -244,7 +286,7 @@ Every key is prefixed `moonwick:` and handled in `src/save.ts` — never touch `
 | `moonwick:bestTier` | Index in `TIERS` of the furthest tier reached |
 | `moonwick:games` | Number of games played |
 | `moonwick:sound` | `"1"` (default) / `"0"` — settings toggle, persists across sessions |
-| `moonwick:tutorialDone` | `"1"` after the first successful graze; hides onboarding forever |
+| `moonwick:tutorialDone` | `"1"` after the first successful graze; gates the one-off first-graze celebration so it never fires twice |
 | `moonwick:lang` | `"en"` / `"fr"` / `"es"` / `"it"` — explicit choice in the settings, wins permanently over `navigator.language` |
 | `moonwick:history` | JSON array of the last `HISTORY.size` scores, oldest first. Malformed or hand-edited content degrades to an empty list, never throws |
 | `moonwick:deaths` | JSON array of the last `DEATHS.size` (50) deaths, oldest first: `{ t, tier, cause, grazes }`. Tuning source of truth, and what `MERCY` is derived from. Individual malformed entries are dropped rather than poisoning the list |
