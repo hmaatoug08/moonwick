@@ -7,6 +7,59 @@ This project follows [semantic versioning](https://semver.org/).
 > before it was created, so their individual dates are not tracked. They are
 > listed in the order they were built.
 
+## [Unreleased]
+
+Art direction pass: obstacles and the witch stopped being geometric placeholders.
+No gameplay, scoring or difficulty change in any of it — the hitbox, the graze
+radius, the tier parameters and the generator are untouched.
+
+### Added
+
+**Death screen**
+- Score history: the last five scores are kept in `moonwick:history` and drawn as a mini bar chart, oldest on the left, with the best of the five in gold.
+- Contextual game-over message, picked from five situations (new record, near record, big combo, early death, default) with two to three random variants each, written out in full per language — never assembled from fragments.
+- "How to play" page reachable from the settings, with three vector pictograms. It is only ever opened on purpose; nothing shows it automatically.
+- `DEBUG_RESET_TUTORIAL` to replay the first-run graze hint without wiping scores, settings or history.
+
+**Obstacles (`src/obstacleShapes.ts`)**
+- Procedural silhouettes: seeded polygons with a spindle profile, a slight bow, contour noise, a ragged termination and a widened footing. Six variants per species, generated once at boot into a single cached `RenderTexture` atlas (96 frames) and picked at random. No image file.
+- Moon rim light: near-black body with a silver-violet edge on the side facing the moon, from a single light direction shared by the whole scene and derived from `MOON`.
+- One tree species per tier (`Tier.essence`): birches, gnarled trunks, brambles, dense stand. Obstacles take the species in force when they spawn, so the changeover rolls in with the existing tier transition.
+- Contrast inversion at The Moon's Eye behind the `MOON_EYE.enabled` toggle: pale golden sky, absolute black obstacles.
+
+**The witch (`src/witchShape.ts`)**
+- Drawn silhouette replacing the placeholder orb: pointed wide-brimmed hat with the point trailing backward, hunched bust, broom held behind with its brush trailing. Cached in a `RenderTexture`, rim obtained by subtraction so it follows the true outline.
+- Real rotation proportional to vertical speed, exponentially smoothed, clamped to -30° / +35°.
+- Procedural cape and hat tip: two three-point damped spring chains drawn as tapered ribbons. They ripple on the climb and snap on the dive with no animation authored.
+- The witch carries the combo: rim opacity and aura grow with the multiplier, up to the golden blaze of Full Moon, so it can be read on the character without looking at the number.
+- Graze reaction: a micro-lean away from the grazed obstacle plus a ripple through the cape, over 150 ms.
+- The same `Witch` class is used by the menu and the death screen, so the character never has two looks.
+
+### Changed
+
+- **Collision and visuals are now separated.** Detection still runs on invisible primitives (one rectangle plus one circle per obstacle part; a circle centred on the witch's torso), and the art is built around them. The rule is one-way: the visual may overshoot the hitbox, never fall inside it.
+- **The witch's hitbox is centred on her torso**, not on her drawing's bounding box. The torso is also the sprite's origin and its rotation pivot, so art and collision cannot drift apart. Hat, cape and broom brush are never lethal.
+- **The witch's body was lifted off pure black.** At near-black her contrast against the sky collapsed as the scene darkened — precisely when the combo is lost and she is hardest to find. Lifted, contrast rises as the light fades.
+- The obstacle outline that strengthened in the dark became the moon rim, which now carries that role.
+- Help-page pictograms redrawn with the new obstacle vocabulary: near-black body, rim on one side only, never an outline all the way round.
+- The replay tap is live on the very first frame of the death screen; the message and the history are drawn synchronously.
+
+### Removed
+
+- The witch's scale-squash deformation, replaced by a real rotation.
+- `RESTART.minDeathMs`, the 100 ms guard before the replay tap was accepted: nothing may delay replaying.
+- The `death.newRecord` label, folded into the contextual message, which turns gold on a record.
+
+### Fixed
+
+- Silhouettes could be drawn wider than their own graze halo, so part of the tree showed where the game scores nothing and the ring stopped reading as a ring. A development-time assertion now throws if the art exceeds what the halo covers.
+- A bowed silhouette left the hitbox exposed on the side opposite the bow: curvature offsets the drawing while the hitbox stays a straight bar, so it now costs extra half-width to pay for itself.
+- The rounded end of an obstacle's hitbox was only covered by an antialiased edge; the cap is now inflated by a safety margin, since at the apex the limiting direction is along the axis rather than across it.
+- The witch's aura was sized as a multiple of the 256 px light texture, which floodlit the screen at Full Moon instead of rimming her; it is now sized in pixels.
+- The witch's hat was clipped by the top of the screen whenever the player held a climb into the ceiling; it is now sized against `WITCH.marginTop`.
+- The "How to play" hit zone overlapped the "Back" button in the settings.
+- The settings panel showed through the help page.
+
 ## [0.1.0] — 2026-07-26
 
 First complete browser version. Unpublished (`private: true`, no deployment):

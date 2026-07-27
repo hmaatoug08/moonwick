@@ -1,3 +1,5 @@
+import { DEBUG_RESET_TUTORIAL, HISTORY } from "./config";
+
 /**
  * localStorage persistence. Every key is prefixed with `moonwick:`.
  * Tolerates unavailable storage (private browsing, quota): the game then runs
@@ -12,6 +14,8 @@
  *   moonwick:tutorialDone  "1" once the first graze has succeeded
  *   moonwick:lang          "en" | "fr" | "es" | "it" — explicit choice, wins
  *                          permanently over navigator.language
+ *   moonwick:history       JSON array of the last HISTORY.size scores, oldest
+ *                          first; malformed content degrades to an empty list
  *
  * Legacy `sorciere:` keys are migrated automatically (see below).
  */
@@ -63,6 +67,39 @@ function write(key: string, value: string): void {
   }
 }
 
+function remove(key: string): void {
+  try {
+    localStorage.removeItem(PREFIX + key);
+  } catch {
+    // Storage unavailable: nothing to remove.
+  }
+}
+
+/**
+ * Last scores, oldest first. Never throws: corrupted or hand-edited content
+ * simply reads back as an empty history.
+ */
+export function loadHistory(): number[] {
+  const raw = read("history");
+  if (raw === null) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value))
+      .slice(-HISTORY.size);
+  } catch {
+    return [];
+  }
+}
+
+/** Appends a score and keeps only the last HISTORY.size entries. */
+function pushHistory(score: number): number[] {
+  const history = [...loadHistory(), score].slice(-HISTORY.size);
+  write("history", JSON.stringify(history));
+  return history;
+}
+
 export type Stats = {
   bestScore: number;
   bestCombo: number;
@@ -79,13 +116,18 @@ export function loadStats(): Stats {
   };
 }
 
-/** Records a finished run and returns the updated stats. */
+/**
+ * Records a finished run and returns the updated stats, plus the score
+ * history including this run. `previousBest` is the record BEFORE this run,
+ * which the caller needs to phrase the "so close" message.
+ */
 export function recordRun(
   score: number,
   combo: number,
   tier: number
-): { stats: Stats; newBestScore: boolean } {
+): { stats: Stats; newBestScore: boolean; history: number[]; previousBest: number } {
   const stats = loadStats();
+  const previousBest = stats.bestScore;
   const newBestScore = score > stats.bestScore && stats.games > 0;
   stats.bestScore = Math.max(stats.bestScore, score);
   stats.bestCombo = Math.max(stats.bestCombo, combo);
@@ -95,7 +137,8 @@ export function recordRun(
   write("bestCombo", String(stats.bestCombo));
   write("bestTier", String(stats.bestTier));
   write("games", String(stats.games));
-  return { stats, newBestScore };
+  const history = pushHistory(score);
+  return { stats, newBestScore, history, previousBest };
 }
 
 export function isSoundEnabled(): boolean {
@@ -126,3 +169,11 @@ export function isTutorialDone(): boolean {
 export function markTutorialDone(): void {
   write("tutorialDone", "1");
 }
+
+/** Makes the first-run graze hint show again, leaving every other key alone. */
+export function resetTutorial(): void {
+  remove("tutorialDone");
+}
+
+// Debug flag applied once at module load, before any scene reads the flag.
+if (DEBUG_RESET_TUTORIAL) resetTutorial();

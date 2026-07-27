@@ -3,6 +3,10 @@
  * Goal: being able to tune the feel by hand without reading the scene code.
  */
 
+// Type-only: obstacleShapes.ts reads OBSTACLE_ART from here, so a value import
+// would close the cycle. Types are erased at compile time.
+import type { Essence } from "./obstacleShapes";
+
 /**
  * Brand name. NEVER translated, NEVER routed through i18n: it is identical in
  * all four languages (see CLAUDE.md, brand rule).
@@ -69,20 +73,37 @@ export type Tier = {
   // Mood: sky tint (top / bottom of the gradient).
   skyTop: number;
   skyBottom: number;
+  /**
+   * Tree species drawn at this tier — RENDERING ONLY, no effect whatsoever on
+   * spacing, width or difficulty. Obstacles take the species in force when
+   * they spawn, so a tier change rolls in with the existing 2 s transition
+   * instead of restyling the obstacles already on screen.
+   */
+  essence: Essence;
+  /** "The Moon's Eye" contrast inversion; gated by MOON_EYE.enabled. */
+  invertContrast?: boolean;
 };
 
 export const TIERS: readonly Tier[] = [
   // 250+5=255, half 127.5: wide, you learn to graze without risk.
-  { nameKey: "tier.edge",     startTime: 0,   scrollSpeed: 220, gapSize: 250, spawnInterval: 1.9,  skyTop: 0x0b0716, skyBottom: 0x241a4a },
+  { nameKey: "tier.edge",     startTime: 0,   scrollSpeed: 220, gapSize: 250, spawnInterval: 1.9,  skyTop: 0x0b0716, skyBottom: 0x241a4a, essence: "birch" },
   // 140+5=145, half 72.5: last tier where pure avoidance is still possible.
-  { nameKey: "tier.darkwood", startTime: 25,  scrollSpeed: 240, gapSize: 140, spawnInterval: 1.75, skyTop: 0x070410, skyBottom: 0x1a1038 },
+  { nameKey: "tier.darkwood", startTime: 25,  scrollSpeed: 240, gapSize: 140, spawnInterval: 1.75, skyTop: 0x070410, skyBottom: 0x1a1038, essence: "gnarled" },
   // 70+5=75, half 37.5 < 38: grazing becomes structurally unavoidable.
-  { nameKey: "tier.brambles", startTime: 50,  scrollSpeed: 255, gapSize: 70,  spawnInterval: 1.6,  skyTop: 0x0a0512, skyBottom: 0x2a1230 },
+  { nameKey: "tier.brambles", startTime: 50,  scrollSpeed: 255, gapSize: 70,  spawnInterval: 1.6,  skyTop: 0x0a0512, skyBottom: 0x2a1230, essence: "bramble" },
   // 67+5=72, half 36 < 38.
-  { nameKey: "tier.wall",     startTime: 80,  scrollSpeed: 270, gapSize: 67,  spawnInterval: 1.5,  skyTop: 0x060309, skyBottom: 0x1f0d22 },
+  { nameKey: "tier.wall",     startTime: 80,  scrollSpeed: 270, gapSize: 67,  spawnInterval: 1.5,  skyTop: 0x060309, skyBottom: 0x1f0d22, essence: "denseStand" },
   // 64+5=69, half 34.5 < 38 — absolute floor (gapFloor), final plateau.
-  { nameKey: "tier.moonEye",  startTime: 120, scrollSpeed: 285, gapSize: 64,  spawnInterval: 1.4,  skyTop: 0x0d0a1f, skyBottom: 0x33205c }
+  // Same shapes as The Wall, but the contrast flips: the moon floods the sky.
+  { nameKey: "tier.moonEye",  startTime: 120, scrollSpeed: 285, gapSize: 64,  spawnInterval: 1.4,  skyTop: 0x0d0a1f, skyBottom: 0x33205c, essence: "denseStand", invertContrast: true }
 ];
+
+/** Sky colours actually used by a tier, once the inversion toggle is applied. */
+export function tierSky(tier: Tier): { top: number; bottom: number } {
+  return MOON_EYE.enabled && tier.invertContrast
+    ? { top: MOON_EYE.skyTop, bottom: MOON_EYE.skyBottom }
+    : { top: tier.skyTop, bottom: tier.skyBottom };
+}
 
 /** Staging of tier changes. */
 export const TIER_FX = {
@@ -199,6 +220,169 @@ export const OBSTACLES = {
     strokeAlphaLit: 0.55,
     strokeAlphaDark: 1
   }
+} as const;
+
+/**
+ * Witch art — RENDERING ONLY. The hitbox is untouched: `NEAR_MISS.deathRadius`
+ * stays a 10 px circle centred on the TORSO, which is also the sprite's origin
+ * and its rotation pivot. The hat, the cape and the broom's brush reach well
+ * past it and are never lethal.
+ *
+ * The drawn body must CONTAIN that circle: the silhouette is built on a core
+ * mass of `coreRadius` around the torso, so the guarantee holds by
+ * construction (see witchShape.ts).
+ */
+export const WITCH_ART = {
+  /** Core body radius, in px. Must stay > NEAR_MISS.deathRadius. */
+  coreRadius: 11.5,
+  /** Supersampling of the cached texture: crisper edges under rotation. */
+  superSample: 2,
+
+  // Tilt: a real rotation driven by vertical speed, smoothed, never a jump.
+  tiltUpDeg: -30,
+  tiltDownDeg: 35,
+  /** Higher = the tilt catches up faster (exponential smoothing, per second). */
+  tiltSmoothing: 9,
+
+  // Cape and hat tip: a 3-point damped spring chain trailing the witch.
+  capeStiffness: 260,
+  capeDamping: 16,
+  /**
+   * Segment length, px. Three of these is the whole trailing length, so it is
+   * what decides whether the cape reads as cloth or as a stray line drifting
+   * behind her.
+   */
+  capeSegment: 7,
+  capeWidth: 9.5,
+  hatStiffness: 340,
+  hatDamping: 19,
+  hatSegment: 4.5,
+  hatWidth: 3.2,
+  /** Trailing points are clamped this far from their anchor (px). */
+  chainMaxStretch: 26,
+
+  /**
+   * Body colour. Lifted off pure black on purpose, and not only for taste: at
+   * near-black (#08050f) her contrast against the sky COLLAPSED as the scene
+   * darkened (down to ~1.05), which is precisely when the player has lost the
+   * combo and most needs to find herself. Lifted, contrast instead RISES as
+   * the light fades (~1.4). It also stops her reading as the same material as
+   * the obstacles, which stay near-black.
+   */
+  bodyColor: 0x332b4e,
+  rimColor: 0xc9b6ff,
+  rimColorFullMoon: 0xffe0a0,
+  /** Rim thickness of the baked light edge, in design px. */
+  rimWidth: 2.2,
+
+  // The witch carries the combo: rim and aura grow with the multiplier.
+  // The rim carries her against a near-black sky, so even at x1 it has to be
+  // clearly present: a near-black body with a faint rim would be untrackable,
+  // and the player aims a 10 px hitbox with it.
+  rimAlphaIdle: 0.8,
+  rimAlphaMax: 1,
+  auraAlphaIdle: 0.08,
+  auraAlphaMax: 0.42,
+  /**
+   * Aura diameter in PIXELS, not a multiple of the light texture: the source
+   * is 256 px, so scaling it by ~1 would drown the character in a floodlight
+   * instead of rimming her.
+   */
+  auraSizeIdle: 46,
+  auraSizeMax: 116,
+  auraColor: 0xa98bff,
+  auraColorFullMoon: 0xffd68a,
+
+  // Graze reaction: a brief lean away from the obstacle, plus a cape ripple.
+  grazeKickMs: 150,
+  grazeKickDeg: 7,
+  grazeCapeImpulse: 300
+} as const;
+
+/**
+ * The moon's position. It is the scene's single light source, so it also fixes
+ * the direction of the obstacle rim light: every silhouette is lit on the side
+ * facing this point, and moving the moon moves every rim with it. See
+ * obstacleShapes.ts / OBSTACLE_ART.rim*.
+ */
+export const MOON = {
+  x: WORLD.width - 70,
+  y: 90
+} as const;
+
+/**
+ * Obstacle art — RENDERING ONLY. None of this touches collision, scoring or
+ * difficulty: the hitbox stays the simple capsule built in obstacles.ts.
+ *
+ * HARD RULE: the drawn silhouette must CONTAIN the collision shape. Every
+ * half-width below is expressed in multiples of the collision radius, and the
+ * generator clamps to `tipFactor` >= 1, so no lethal pixel is ever invisible.
+ * The visual may overshoot — never undershoot.
+ */
+export const OBSTACLE_ART = {
+  variantsPerEssence: 6,
+  // Deterministic seed base: the same build always produces the same shapes.
+  seed: 20260727,
+
+  // Spindle: half-width from the anchored base down to the tip, in collision
+  // radii. Strictly decreasing, and never below 1.
+  baseFactor: 1.7,
+  tipFactor: 1.05,
+  /**
+   * Safety margin, in collision radii, kept between the drawn contour and the
+   * hitbox. Without it the clamp lands exactly on the hitbox edge on the side
+   * opposite the bow, and the outermost lethal pixel would only be covered by
+   * a half-transparent antialiased edge.
+   */
+  coverMargin: 0.12,
+  // Widened footing where the obstacle meets the screen edge.
+  anchorFactor: 0.42,
+  anchorZone: 0.18,
+
+  // Tip zone, in collision radii: it starts 2 radii before the collision end
+  // and reaches 1.2 radii past it, so the rounded cap is always covered.
+  tipUnits: 3.2,
+  tipOvershoot: 1.2,
+
+  // Source resolution: one collision radius is this many texture pixels.
+  unitPx: 16,
+  shaftUnits: 10,
+
+  // Body is near-pure black; the rim is the readability element.
+  bodyColor: 0x05030a,
+  rimColor: 0xc9b6ff,
+  rimWidthUnits: 0.26,
+  // Rim opacity: full light -> maximum darkness. Mirrors the outline rule
+  // that the old flat obstacles used (see CLAUDE.md, readability invariant).
+  rimAlphaLit: 0.5,
+  rimAlphaDark: 1
+} as const;
+
+/**
+ * "The Moon's Eye" contrast inversion: pale golden sky flooded by the moon,
+ * obstacles in absolute black. Toggle for the whole effect — when false the
+ * tier keeps the normal dark palette and nothing else changes.
+ */
+export const MOON_EYE = {
+  enabled: true,
+  skyTop: 0xd9c9a0,
+  skyBottom: 0xa88f63,
+  bodyColor: 0x000000,
+  // On a pale background the silhouette reads by itself; the rim turns into a
+  // discreet dark edge instead of a glow.
+  rimColor: 0x2a2036,
+  rimAlpha: 0.45,
+  /**
+   * Inverting the background inverts what "visible" means. The graze halo and
+   * the HUD are light-on-dark everywhere else; left as they are they would
+   * almost vanish against pale gold — and CLAUDE.md requires the halo to stay
+   * perfectly readable at all times. Both flip to dark-on-light here.
+   */
+  haloColor: 0x4a2d8f,
+  haloAlphaScale: 1.6,
+  scoreColor: "#241a08",
+  multiplierColor: "#4a2d8f",
+  magicBarColor: 0x4a2d8f
 } as const;
 
 /**
@@ -393,10 +577,38 @@ export const TEACH = {
   offsetX: -96
 } as const;
 
-export const RESTART = {
-  // Minimum delay before accepting the replay tap: prevents restarting
-  // without seeing the death screen if the finger was already coming down.
-  minDeathMs: 100
+// NOTE: there is deliberately no delay before the death screen accepts the
+// replay tap. The contextual message and the score history must never gate
+// replaying (see CLAUDE.md, accessibility floor).
+
+/**
+ * Score history shown on the death screen as a mini bar chart.
+ * Oldest on the left, the run that just ended on the right.
+ */
+export const HISTORY = {
+  size: 5,
+  barWidth: 26,
+  barGap: 14,
+  maxBarHeight: 44,
+  // A zero score still draws a sliver, so five runs always read as five bars.
+  minBarHeight: 3,
+  baselineY: 543,
+  color: 0x9b6bff,
+  recordColor: 0xffd27a,
+  labelColor: "#8877aa",
+  recordLabelColor: "#ffd27a"
+} as const;
+
+/**
+ * Thresholds that pick the contextual game-over message.
+ * Priority order is fixed in FlightScene.pickDeathCategory():
+ * newRecord > nearRecord > bigCombo > earlyDeath > default.
+ */
+export const DEATH_MESSAGE = {
+  // At or above this fraction of the record (without beating it) -> "so close".
+  nearRecordRatio: 0.85,
+  bigComboThreshold: 8,
+  earlyDeathSeconds: 10
 } as const;
 
 /** Draws the lethal hitbox, the graze ring and the collision shapes. */
@@ -404,6 +616,13 @@ export const DEBUG_HITBOX = false;
 
 /** Debug overlay, top left: fps, speed, tier name. */
 export const DEBUG_STATS = false;
+
+/**
+ * Debug: clears the first-run onboarding flag on boot, so the graze hint
+ * shows again. Only touches `moonwick:tutorialDone` — scores, settings and
+ * history are left alone.
+ */
+export const DEBUG_RESET_TUTORIAL = false;
 
 // --- Guard rail (dev only): tier fairness constraint.
 // Every obstacle is the only chance to refill the combo timer, so no tier may
