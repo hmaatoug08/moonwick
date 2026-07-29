@@ -376,3 +376,34 @@ Two faces, two jobs, defined once in `TYPE` (config.ts) and spoken through the
 stays the combo timer alone. Violet is hairlines at 12–30 % alpha, no longer a
 border on everything. Touch targets keep the 44/48 px floors regardless of how
 quiet the paint is — "no box" changes what is drawn, never what is tappable.
+
+### The mark — "the lit crescent"
+
+The name is two things — a MOON and a WICK — so the mark is one shape doing
+both: a waxing crescent whose upper horn is lit like a candle. It is built
+from two circles and a teardrop (moon r 100; shadow r 92, centre offset 44
+towards the dark side; their intersections put the horns at ±91.9, the top
+one is the wick, and the flame sits 12 above it on the centre-right axis).
+It draws in Canvas 2D in a dozen lines and needs no image file.
+
+**She lights the wick.** The witch flies out of the crescent's bay on the
+same tilt the game gives her (−14°), and her golden trail arcs up the inner
+edge to the horn. The silhouette is TRANSCRIBED from `witchShape.ts` — the
+same broom and brush polygons, the core disc, the single hat polygon (brim
+and cone as one outline, never two pieces), and the rim built by offsetting
+towards the moon. She is the character the game draws, not a redrawing of
+her, and she keeps her colours (`LOGO.witchBody`/`witchRim`).
+
+**Why the two-tier rule.** The witch rides in every full lockup — stacked,
+horizontal, app icon, inverted, one-colour — at 88 px of mark or more. At
+64 px and below she would be ~30 px of silhouette: a smudge, and a smudge is
+worse than an absence, so the mark drops to the crescent and flame alone.
+Below ~28 px a hairline sliver and a teardrop also disappear, which is why
+the small recipes thicken the crescent and round the flame into a dot: same
+construction, three sets of radii.
+
+**Why the light follows `MOON.x`.** The crescent is lit on the right because
+the scene's moon is on the right — the mark reads the same constant the
+obstacle rims do, so moving the moon in config relights the logo with the
+whole forest. The canonical drawing is lit-right; the buffer mirrors as one
+piece, witch and all.

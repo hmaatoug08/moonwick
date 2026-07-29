@@ -7,6 +7,7 @@ import {
   FIREFLIES,
   FULL_MOON,
   MERCY,
+  LOGO,
   NEAR_MISS,
   OBSTACLE_ART,
   SAFE_BOTTOM,
@@ -22,6 +23,7 @@ import { MOON_ON_RIGHT } from "./obstacleShapes";
 import { Witch } from "./witchShape";
 import { getLanguage, LANG_NAMES, LANGS, Lang, onLanguageChange, setLanguage, t } from "./i18n";
 import { isSoundEnabled, loadDeaths, loadStats, setSoundEnabled, shouldEase } from "./save";
+import { ensureLogoTexture, LOGO_MARK_KEY, LOGO_PAD_UNITS } from "./logo";
 import { addMoon, NightScenery } from "./scenery";
 import { ensureTextures, LIGHT_KEY, SPARK_KEY } from "./textures";
 import {
@@ -62,8 +64,10 @@ export class MenuScene extends Phaser.Scene {
 
   private titleText!: Phaser.GameObjects.Text;
   private brandGlow!: Phaser.GameObjects.Image;
+  private logoMark!: Phaser.GameObjects.Image;
   private bestLabel!: Phaser.GameObjects.Text;
   private bestText!: Phaser.GameObjects.Text;
+  private taglineText!: Phaser.GameObjects.Text;
   private playText!: Phaser.GameObjects.Text;
   private tapText!: Phaser.GameObjects.Text;
   /** Home-only furniture (arc, dividers): hidden with the rest of the home. */
@@ -240,10 +244,22 @@ export class MenuScene extends Phaser.Scene {
       ease: "Sine.easeInOut"
     });
 
+    // The stacked lockup: the lit-crescent mark over the wordmark, a flame
+    // diamond on a fading hairline beneath. Brand, not interface — only the
+    // tagline under it goes through i18n.
+    ensureLogoTexture(this);
+    const markH = LOGO.homeSize * ((LOGO.unit + LOGO_PAD_UNITS) / LOGO.unit);
+    this.logoMark = this.add
+      .image(cx, 146, LOGO_MARK_KEY)
+      .setDisplaySize(LOGO.homeSize, markH)
+      .setDepth(20);
+    // The flame and witch glows are baked into the texture (logo.ts); the
+    // only glow the scene adds is the big breathing one behind the lockup.
+
     // The title is a LOGO, not interface text: untranslated brand, serif
     // light, wide letter-spacing. It therefore never goes through i18n.
     this.titleText = this.add
-      .text(cx, 226, BRAND.name, {
+      .text(cx, 262, BRAND.name, {
         fontFamily: TYPE.serif,
         fontStyle: "300",
         color: BRAND.color
@@ -256,34 +272,39 @@ export class MenuScene extends Phaser.Scene {
     this.titleText.setShadow(0, 0, BRAND.shadowColor, BRAND.shadowBlur, false, true);
     fitText(this.titleText, WORLD.width - 40, BRAND.fontSizePx);
 
-    // Moon-arc under the word — the game's motif (the Percée arch), replacing
-    // any frame. Logo furniture, not interface: no text, no hit area.
-    const arc = this.add.graphics().setDepth(20);
-    arc.lineStyle(1, BRAND.arcColor, BRAND.arcAlpha);
-    arc.beginPath();
-    const arcCy = BRAND.arcY + BRAND.arcHeight / 2;
-    for (let i = 0; i <= 32; i++) {
-      const angle = (i / 32) * Math.PI;
-      const px = cx - Math.cos(angle) * (BRAND.arcWidth / 2);
-      const py = arcCy + Math.sin(angle) * (BRAND.arcHeight / 2);
-      if (i === 0) arc.moveTo(px, py);
-      else arc.lineTo(px, py);
-    }
-    arc.strokePath();
-    this.homeExtras.push(arc);
-    // Long-press target. Padded well beyond the glyphs: this is a hidden
-    // gesture, it should not demand precision.
-    this.titleZone = new Phaser.Geom.Rectangle(0, 150, WORLD.width, 130);
+    // Divider from the lockup: two fading hairlines meeting a flame diamond.
+    const divider = this.add.graphics().setDepth(20);
+    const divY = 312;
+    const divHalf = 120;
+    divider.fillGradientStyle(TYPE.bandLine, TYPE.bandLine, TYPE.bandLine, TYPE.bandLine, 0, 0.45, 0, 0.45);
+    divider.fillRect(cx - divHalf, divY, divHalf - 10, 1);
+    divider.fillGradientStyle(TYPE.bandLine, TYPE.bandLine, TYPE.bandLine, TYPE.bandLine, 0.45, 0, 0.45, 0);
+    divider.fillRect(cx + 10, divY, divHalf - 10, 1);
+    divider.fillStyle(0xffd9a0, 1);
+    divider.save();
+    divider.translateCanvas(cx, divY);
+    divider.rotateCanvas(Math.PI / 4);
+    divider.fillRect(-3, -3, 6, 6);
+    divider.restore();
+    this.homeExtras.push(divider);
+    // Long-press target. Padded well beyond the glyphs — the whole lockup,
+    // mark included: this is a hidden gesture, it should not demand precision.
+    this.titleZone = new Phaser.Geom.Rectangle(0, 100, WORLD.width, 190);
 
-    // BEST · 1240 — caps label, serif gold value. Two texts because the two
-    // voices never share a font; centred as a pair in refreshTexts().
-    this.bestLabel = capsText(this, cx, 312, "", 11, TYPE.label, "700", 0.28)
+    // Under the divider, ONE line: "BEST · 1240" (caps label, serif gold
+    // value) once a record exists — or the brand tagline on a first launch,
+    // when there is nothing to boast yet. Never both.
+    this.bestLabel = capsText(this, cx, 344, "", 11, TYPE.label, "700", 0.28)
       .setOrigin(1, 0.5)
       .setDepth(20);
     this.bestText = this.add
-      .text(cx, 312, "", { fontFamily: TYPE.serif, fontStyle: "500", fontSize: "19px", color: TYPE.gold })
+      .text(cx, 344, "", { fontFamily: TYPE.serif, fontStyle: "500", fontSize: "19px", color: TYPE.gold })
       .setOrigin(0, 0.5)
       .setDepth(20);
+    this.taglineText = capsText(this, cx, 344, "", 11, "", "600", 0.42)
+      .setOrigin(0.5)
+      .setDepth(20)
+      .setColor(TYPE.violetDim);
 
     // A STILL line: the old "Tap to play" blinked at a player who was reading
     // it. Serif italic states the verb; the caps hint below names the gesture.
@@ -361,9 +382,11 @@ export class MenuScene extends Phaser.Scene {
   private setHomeVisible(on: boolean): void {
     this.titleText.setVisible(on);
     this.brandGlow.setVisible(on);
+    this.logoMark.setVisible(on);
     const hasBest = loadStats().bestScore > 0;
     this.bestLabel.setVisible(on && hasBest);
     this.bestText.setVisible(on && hasBest);
+    this.taglineText.setVisible(on && !hasBest);
     this.playText.setVisible(on);
     this.tapText.setVisible(on);
     this.gearIcon.setVisible(on);
@@ -594,17 +617,23 @@ export class MenuScene extends Phaser.Scene {
     // The title is NOT refreshed here: it is a brand, not an interface string
     // — it never changes with the language.
 
-    // No guilt-inducing "0": the best score only appears once it exists.
+    // No guilt-inducing "0": the best score only appears once it exists —
+    // until then the line under the lockup belongs to the brand tagline.
     // Caps label + serif gold value, centred as a pair around the middle.
     const hasBest = stats.bestScore > 0;
-    this.bestLabel.setVisible(hasBest && !this.settingsOpen && !this.helpOpen && !this.statsOpen);
+    const homeShowing = !this.settingsOpen && !this.helpOpen && !this.statsOpen;
+    this.bestLabel.setVisible(hasBest && homeShowing);
     this.bestText.setVisible(this.bestLabel.visible);
+    this.taglineText.setVisible(!hasBest && homeShowing);
     if (hasBest) {
       setCaps(this.bestLabel, t("menu.best"));
       this.bestText.setText(String(stats.bestScore));
       const pairWidth = this.bestLabel.width + 10 + this.bestText.width;
       this.bestLabel.setX(WORLD.width / 2 - pairWidth / 2 + this.bestLabel.width);
       this.bestText.setX(this.bestLabel.x + 10);
+    } else {
+      setCaps(this.taglineText, t("menu.tagline"));
+      fitText(this.taglineText, WORLD.width - 64, 11);
     }
 
     setCaps(this.scoresLabel, t("scores"));

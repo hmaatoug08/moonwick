@@ -75,13 +75,53 @@ export const BRAND = {
   // Soft halo baked into the glyphs themselves (canvas text shadow), so the
   // word glows even where the breathing background glow is at its dimmest.
   shadowColor: "rgba(255,233,168,0.35)",
-  shadowBlur: 26,
-  // Moon-arc under the word: the same arc as the Percée, the game's motif.
-  arcWidth: 140,
-  arcHeight: 34,
-  arcY: 262,
-  arcColor: 0xffd9a0,
-  arcAlpha: 0.35
+  shadowBlur: 26
+} as const;
+
+/**
+ * The mark — "the lit crescent". The name is two things, a MOON and a WICK,
+ * so the mark is one shape doing both: a waxing crescent whose upper horn is
+ * lit like a candle. Two circles and a teardrop (src/logo.ts), no image file.
+ *
+ * Geometry in a 200-unit square: moon circle r 100, shadow circle r 92 with
+ * its centre offset 44 towards the dark side, flame 14 x 24 above the upper
+ * horn. THE LIT SIDE FOLLOWS `MOON.x` — the mark reads the same constant the
+ * obstacles do, so moving the moon in config relights the logo with the
+ * forest.
+ *
+ * Below ~28 px a hairline sliver and a teardrop both disappear, so the small
+ * recipes thicken the crescent and round the flame into a dot: same
+ * construction, three sets of radii (the favicon uses `tiny`).
+ *
+ * DON'T (from the brand sheet): no outline around the crescent, no second
+ * flame, no rotation, no gradient across the wordmark, and never a violet
+ * flame on a dark ground — it stops reading as fire.
+ */
+export const LOGO = {
+  unit: 200,
+  moonR: 100,
+  /**
+   * TWO-TIER SYSTEM: `full` carries the WITCH flying out of the crescent's
+   * bay — she is what lights the wick — and rides in every lockup at
+   * `witchMinPx` of mark or more. Below that the mark drops to crescent and
+   * flame alone (`small`, `tiny`): at 30 px of silhouette she is a smudge,
+   * and a smudge is worse than an absence.
+   */
+  full: { shadowR: 92, shadowOffset: 44, flameW: 14, flameH: 24, teardrop: true },
+  small: { shadowR: 88, shadowOffset: 40, flameW: 26, flameH: 34, teardrop: false },
+  tiny: { shadowR: 84, shadowOffset: 36, flameW: 38, flameH: 44, teardrop: false },
+  witchMinPx: 88,
+  /** Gap between the upper horn and the flame's base, in units. */
+  flameLift: 12,
+  bodyColor: "#f4eee0",
+  flameColor: "#ffd9a0",
+  flameTipColor: "#fff6e2",
+  // Her silhouette keeps the game's own colours (witchShape.ts): near-black
+  // body lifted off pure black, silver-violet rim on the moon side.
+  witchBody: "#332b4e",
+  witchRim: "#c9b6ff",
+  /** Mark height on the home screen, in px — above `witchMinPx` on purpose. */
+  homeSize: 96
 } as const;
 
 /** Logical size (portrait); must match the scale config in main.ts. */

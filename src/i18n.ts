@@ -26,6 +26,10 @@ const EN = {
   "menu.hold": "Hold to fly",
   "menu.tap": "Tap anywhere",
   "menu.best": "Best",
+  // Under the lockup on a first launch only: once a best score exists, the
+  // record takes this line. The brand NAME stays out of i18n; its tagline is
+  // interface text like any other.
+  "menu.tagline": "A night flight",
 
   "settings.title": "Settings",
   "settings.language": "Language",
@@ -108,6 +112,7 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "menu.hold": "Maintiens pour voler",
     "menu.tap": "Tape n'importe où",
     "menu.best": "Record",
+    "menu.tagline": "Un vol de nuit",
 
     "settings.title": "Réglages",
     "settings.language": "Langue",
@@ -177,6 +182,7 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "menu.hold": "Mantén pulsado para volar",
     "menu.tap": "Toca en cualquier lugar",
     "menu.best": "Récord",
+    "menu.tagline": "Un vuelo nocturno",
 
     "settings.title": "Ajustes",
     "settings.language": "Idioma",
@@ -246,6 +252,7 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "menu.hold": "Tieni premuto per volare",
     "menu.tap": "Tocca ovunque",
     "menu.best": "Record",
+    "menu.tagline": "Un volo notturno",
 
     "settings.title": "Impostazioni",
     "settings.language": "Lingua",
