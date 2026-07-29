@@ -22,8 +22,17 @@ import { drawBookIcon } from "./icons";
 import { MOON_ON_RIGHT } from "./obstacleShapes";
 import { Witch } from "./witchShape";
 import { getLanguage, LANG_NAMES, LANGS, Lang, onLanguageChange, setLanguage, t } from "./i18n";
-import { isSoundEnabled, loadDeaths, loadStats, setSoundEnabled, shouldEase } from "./save";
+import {
+  isMusicEnabled,
+  isSoundEnabled,
+  loadDeaths,
+  loadStats,
+  setMusicEnabled,
+  setSoundEnabled,
+  shouldEase
+} from "./save";
 import { ensureLogoTexture, LOGO_MARK_KEY, LOGO_PAD_UNITS } from "./logo";
+import { music } from "./music";
 import { addMoon, NightScenery } from "./scenery";
 import { ensureTextures, LIGHT_KEY, SPARK_KEY } from "./textures";
 import {
@@ -84,6 +93,7 @@ export class MenuScene extends Phaser.Scene {
   private gearZone!: Phaser.Geom.Rectangle;
   private backZone!: Phaser.Geom.Rectangle;
   private soundZone!: Phaser.Geom.Rectangle;
+  private musicZone!: Phaser.Geom.Rectangle;
   private howToZone!: Phaser.Geom.Rectangle;
   private langZones: { lang: Lang; zone: Phaser.Geom.Rectangle }[] = [];
 
@@ -110,6 +120,8 @@ export class MenuScene extends Phaser.Scene {
   private langLabelText!: Phaser.GameObjects.Text;
   private soundLabelText!: Phaser.GameObjects.Text;
   private soundValueText!: Phaser.GameObjects.Text;
+  private musicLabelText!: Phaser.GameObjects.Text;
+  private musicValueText!: Phaser.GameObjects.Text;
   private backText!: Phaser.GameObjects.Text;
   private langRows: {
     lang: Lang;
@@ -210,7 +222,14 @@ export class MenuScene extends Phaser.Scene {
     this.refreshTexts();
     this.setHomeVisible(true);
 
-    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => this.onPointerDown(pointer));
+    // The home screen is the audible rest: drone alone, stray firefly
+    // chimes. The context itself can only open on the first tap (unlock).
+    music.setMode("rest");
+
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      music.unlock();
+      this.onPointerDown(pointer);
+    });
     this.input.on("pointerup", () => this.onPointerUp());
     this.input.on("pointerupoutside", () => this.onPointerUp());
     // A pending long press must not fire into a scene that is going away.
@@ -443,8 +462,9 @@ export class MenuScene extends Phaser.Scene {
       children.push(marker, label, line);
     });
 
-    // Sound toggle: caps label on the left, serif value on the right.
-    const soundTop = 552;
+    // Sound toggle: caps label on the left, serif value on the right. It
+    // gates the EFFECTS; the music has its own switch just below.
+    const soundTop = 528;
     this.soundLabelText = capsText(this, 28, soundTop + rowH / 2, "", 11, TYPE.label, "700", 0.26).setOrigin(
       0,
       0.5
@@ -457,8 +477,23 @@ export class MenuScene extends Phaser.Scene {
     this.soundZone = new Phaser.Geom.Rectangle(20, soundTop, WORLD.width - 40, rowH);
     children.push(this.soundLabelText, this.soundValueText, soundLine);
 
+    // Music toggle: its own row and its own persisted choice (moonwick:music)
+    // — a player may want the effects without the bed, or the reverse.
+    const musicTop = 590;
+    this.musicLabelText = capsText(this, 28, musicTop + rowH / 2, "", 11, TYPE.label, "700", 0.26).setOrigin(
+      0,
+      0.5
+    );
+    this.musicValueText = serifText(this, WORLD.width - 28, musicTop + rowH / 2, "", 26, TYPE.cream).setOrigin(
+      1,
+      0.5
+    );
+    const musicLine = hairline(this, 28, musicTop + rowH, WORLD.width - 56);
+    this.musicZone = new Phaser.Geom.Rectangle(20, musicTop, WORLD.width - 40, rowH);
+    children.push(this.musicLabelText, this.musicValueText, musicLine);
+
     // "How to play": opens the help page. Nothing shows it automatically.
-    const howToTop = 614;
+    const howToTop = 652;
     this.howToText = capsText(this, 28, howToTop + rowH / 2, "", 11, TYPE.label, "700", 0.26).setOrigin(
       0,
       0.5
@@ -657,6 +692,10 @@ export class MenuScene extends Phaser.Scene {
     fitText(this.soundLabelText, 220, 11);
     this.refreshSoundValue();
 
+    setCaps(this.musicLabelText, t("settings.music"));
+    fitText(this.musicLabelText, 220, 11);
+    this.refreshMusicValue();
+
     setCaps(this.backText, t("settings.back"));
     fitText(this.backText, WORLD.width - 64, 12);
 
@@ -686,6 +725,11 @@ export class MenuScene extends Phaser.Scene {
   private refreshSoundValue(): void {
     this.soundValueText.setText(isSoundEnabled() ? t("settings.soundOn") : t("settings.soundOff"));
     fitText(this.soundValueText, 120, 26);
+  }
+
+  private refreshMusicValue(): void {
+    this.musicValueText.setText(isMusicEnabled() ? t("settings.soundOn") : t("settings.soundOff"));
+    fitText(this.musicValueText, 120, 26);
   }
 
   /** Gold diamond and cream name on the active row; the rest stays muted. */
@@ -825,6 +869,12 @@ export class MenuScene extends Phaser.Scene {
         this.refreshSoundValue();
         return;
       }
+      if (this.musicZone.contains(pointer.x, pointer.y)) {
+        setMusicEnabled(!isMusicEnabled());
+        // No restart needed: the bed reads the toggle live and fades.
+        this.refreshMusicValue();
+        return;
+      }
       if (this.howToZone.contains(pointer.x, pointer.y)) {
         this.helpOpen = true;
         this.helpPanel.setVisible(true);
@@ -878,6 +928,9 @@ export class MenuScene extends Phaser.Scene {
     const dt = deltaMs / 1000;
     // The forest breathes behind her, far below any tier speed: a rest.
     this.scenery.update(dt, SCENERY.menuDriftPxS);
+    // The audible half of that rest — also where the settings sound toggle
+    // takes effect live, since the toggle lives on this scene.
+    music.update(dt);
     const y = WORLD.height * 0.47 + Math.sin(t2 * 1.7) * 70;
     // Her own vertical speed drives the tilt, so she banks through the loop.
     const vy = (y - this.demoWitch.y) / Math.max(dt, 1 / 240);

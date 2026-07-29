@@ -3,12 +3,31 @@ import { isSoundEnabled } from "./save";
 
 /**
  * Sounds synthesised on the fly: no files, no preloading.
- * Only two of them — a graze swoosh whose pitch rises with the combo, and a
- * low impact on death.
  *
- * The audio context can only start after a user gesture, so we open it lazily
- * on the first sound and wake it up on every tap.
+ * The audio context can only start after a user gesture, so it opens lazily
+ * on the first sound and wakes up on every tap. There is exactly ONE context
+ * for the whole game — the music (src/music.ts) builds its layers on this
+ * same context, never a second one.
  */
+let sharedCtx: AudioContext | null = null;
+
+/** The game's one AudioContext, created lazily. Null if Web Audio is absent. */
+export function audioContext(): AudioContext | null {
+  if (sharedCtx) return sharedCtx;
+  const Ctor =
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctor) return null;
+  sharedCtx = new Ctor();
+  return sharedCtx;
+}
+
+/** Call on a real gesture (pointerdown), otherwise the browser refuses. */
+export function unlockAudio(): void {
+  const ctx = audioContext();
+  if (ctx && ctx.state === "suspended") void ctx.resume();
+}
+
 export class Sfx {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -30,22 +49,19 @@ export class Sfx {
 
   /** Call on a real gesture (pointerdown), otherwise the browser refuses. */
   unlock(): void {
-    const ctx = this.ensureContext();
-    if (ctx && ctx.state === "suspended") void ctx.resume();
+    this.ensureContext();
+    unlockAudio();
   }
 
   private ensureContext(): AudioContext | null {
     if (this.ctx) return this.ctx;
+    const ctx = audioContext();
+    if (!ctx) return null;
 
-    const Ctor =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctor) return null;
-
-    this.ctx = new Ctor();
-    this.master = this.ctx.createGain();
+    this.ctx = ctx;
+    this.master = ctx.createGain();
     this.master.gain.value = SFX.masterVolume;
-    this.master.connect(this.ctx.destination);
+    this.master.connect(ctx.destination);
     return this.ctx;
   }
 

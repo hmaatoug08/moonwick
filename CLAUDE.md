@@ -12,7 +12,7 @@ Criterion #2: *does a new player understand within 10 seconds that grazing is wh
 - Phaser 3 + TypeScript + Vite. Target: 60 fps on a mid-range phone.
 - `npm run dev` to develop, `npm run build` to validate (tsc + vite).
 - Capacitor in Phase 7 only. No backend, no server dependency.
-- **No image files.** Every visual is generated procedurally at boot (`textures.ts`, `obstacleShapes.ts`, `witchShape.ts`, `icons.ts`).
+- **No asset files — images OR audio.** Every visual is generated procedurally at boot (`textures.ts`, `obstacleShapes.ts`, `witchShape.ts`, `icons.ts`, `logo.ts`); every sound AND the music are synthesised in Web Audio (`sfx.ts`, `music.ts`), on ONE shared AudioContext.
 
 ## Development rules (IMPORTANT)
 1. **One phase at a time.** Never implement features from a future phase without an explicit request.
@@ -221,6 +221,7 @@ Every key is prefixed `moonwick:` and handled in `src/save.ts` — never touch `
 | `moonwick:bestTier` | Index in `TIERS` of the furthest tier reached |
 | `moonwick:games` | Number of games played |
 | `moonwick:sound` | `"1"` (default) / `"0"` — settings toggle, persists across sessions |
+| `moonwick:music` | `"1"` (default) / `"0"` — music toggle, separate from the sound toggle |
 | `moonwick:tutorialDone` | `"1"` after the first successful graze; gates the one-off first-graze celebration so it never fires twice |
 | `moonwick:lang` | `"en"` / `"fr"` / `"es"` / `"it"` — explicit choice in the settings, wins permanently over `navigator.language` |
 | `moonwick:history` | JSON array of the last `HISTORY.size` scores, oldest first. Malformed or hand-edited content degrades to an empty list, never throws |
@@ -230,6 +231,7 @@ Every key is prefixed `moonwick:` and handled in `src/save.ts` — never touch `
 ## Accessibility and quality (permanent floor)
 - `prefers-reduced-motion` honoured for screen shake and slow motion.
 - Sound volume low by default, mutable from the settings (choice persists).
+- **The music is synthesised, never a file** (`src/music.ts`, `MUSIC` in config.ts), on the SAME AudioContext as the effects — never a second one. Four layers (pad / air — a filtered-noise night wind, stronger at rest and in the cold / rhythm from combo 2 / melody at Full Moon) fade, never cut; tonality follows the tier; patterns come from a scale and a per-run seed, so no fixed loop ever repeats. Its volume sits clearly under the effects, it starts only after the first gesture, and it goes fully silent when the tab loses focus — consistent with the automatic pause. Own toggle in the settings (`settings.music` key, i18n in four languages), persisted as `moonwick:music` via save.ts, separate from the Sound toggle. ONE singleton; scenes set its mode (`run`/`rest`), never own players. -> DESIGN.md, "The music".
 - Portrait format, one hand, no text required to understand the game.
 - Playable in 4 languages with no text overflow on any screen (see Internationalisation).
 - Restart stays **under 300 ms** (in-place reset, no scene reload) and the tap that restarts is never read as a flight input. Same for the tap that resumes after a pause.

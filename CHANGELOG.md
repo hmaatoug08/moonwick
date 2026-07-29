@@ -9,6 +9,18 @@ This project follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+**Adaptive music, entirely synthesised** (`src/music.ts` new, `MUSIC` in `src/config.ts`, `src/sfx.ts`, `src/save.ts`, `src/i18n.ts`, `src/FlightScene.ts`, `src/MenuScene.ts`, `CLAUDE.md`, `DESIGN.md`)
+
+No audio file — the zero-asset pillar holds, and now says so explicitly in CLAUDE.md ("no asset files, images OR audio"). Built on the effects' own AudioContext (`audioContext()`/`unlockAudio()` extracted from sfx.ts), never a second one.
+
+- **Four layers, faded in and out, never a hard cut**: a permanent ambient pad; an AIR bed of quiet filtered noise (candle smoke / night wind), more present at rest and rising as the run cools or the record nears; a rhythmic layer of soft low pulses entering from combo 2, density following the multiplier; a melodic layer at Full Moon. Losing the combo makes the layers retreat and the lowpass close towards 60 % of its floor — the same impoverishment logic as the scenery's visual cooling.
+- **Tonality follows the tier**: one root note per `TIERS` entry (D3, C3, Bb2, G2, then up to E3 at The Moon's Eye — the game's one bright place), gliding with the tier transition. The Percée approach ducks the whole bed 70 % — the same held breath as the swoosh detune — and the slow-motion crossing silences the music entirely.
+- **Non-repetitive by construction**: rhythm and melody are drawn per bar from a minor-pentatonic scale and a per-run seed (`reseed()` at every restart). No fixed loop; a 60 s session replayed twenty times never plays the same passage. Why generative rather than composed, and how the music doubles the visual reading of state instead of competing with it: DESIGN.md, "The music".
+- **Own switch**: a "Music" row in the settings, separate from the Sound toggle (a player may want the effects without the bed, or the reverse), persisted as `moonwick:music` via save.ts — never localStorage directly. New i18n key `settings.music` in the four languages, sized against the longest translation like every label.
+- **Floors respected**: volume clearly under the effects (`MUSIC.masterVolume` 0.055 vs `SFX.masterVolume` 0.12); starts only after the first user gesture (autoplay policy, same unlock as the effects); full silence when the tab loses focus or hides — consistent with the automatic pause; O(1) per frame with one look-ahead beat and no per-frame node allocation, so nothing shows against 60 fps at The Wall.
+- The menu and the death screen play the rest variant: half-level pad plus a stray firefly chime every 5–11 s. One singleton carries the bed across menu -> run -> death with no seam inside the 300 ms replay loop.
+- No gameplay, scoring or difficulty change.
+
 **The mark — "the lit crescent", with the witch** (`src/logo.ts` new, `LOGO` in `src/config.ts`, `src/MenuScene.ts`, `src/share.ts`, `src/i18n.ts`, `index.html`, `CLAUDE.md`, `DESIGN.md`)
 
 Implemented from the Claude Design brand sheet ("Moonwick — logo"). The name is two things — a moon and a wick — so the mark is one shape doing both: a waxing crescent whose upper horn carries a candle flame, and THE WITCH is what lights it: she flies out of the crescent's bay on the game's own tilt (−14°), her golden trail arcing up the inner edge to the horn. Canvas 2D at boot; no image file.
