@@ -80,6 +80,24 @@ function remove(key: string): void {
 }
 
 /**
+ * Raw prefixed access, for modules that own their own key and serialisation
+ * (stats.ts). Everything still goes through this file, so the `moonwick:`
+ * prefix, the legacy migration and the storage-unavailable tolerance stay in
+ * one place — see CLAUDE.md: nothing else may touch localStorage directly.
+ */
+export function readRaw(key: string): string | null {
+  return read(key);
+}
+
+export function writeRaw(key: string, value: string): void {
+  write(key, value);
+}
+
+export function removeRaw(key: string): void {
+  remove(key);
+}
+
+/**
  * Last scores, oldest first. Never throws: corrupted or hand-edited content
  * simply reads back as an empty history.
  */

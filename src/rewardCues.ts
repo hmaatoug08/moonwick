@@ -213,8 +213,20 @@ export class RewardCues {
    * @param wx,wy the witch's position — where collected fireflies converge
    * @param multiplier current multiplier, for the value tags
    */
-  update(dt: number, time: number, wx: number, wy: number, multiplier: number): void {
+  /**
+   * @param tension Percée approach, 0..1. The fireflies drift slowly forward,
+   *                as if drawn towards the marker. Atmosphere only.
+   */
+  update(
+    dt: number,
+    time: number,
+    wx: number,
+    wy: number,
+    multiplier: number,
+    tension = 0
+  ): void {
     const value = RewardCues.valueAt(multiplier);
+    const drift = tension * FIREFLIES.tensionDrift;
 
     for (const fly of this.flies) {
       if (fly.obstacle === null) continue;
@@ -222,6 +234,8 @@ export class RewardCues {
 
       if (fly.state === "idle") {
         const t = time / 1000;
+        // Under Percée tension they lean forward, towards the marker.
+        fly.ox += drift * dt;
         img.x =
           fly.obstacle.x + fly.ox + Math.sin(t * Math.PI * 2 * FIREFLIES.driftHz + fly.phase) * FIREFLIES.driftPx;
         img.y =

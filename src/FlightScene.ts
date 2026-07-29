@@ -15,6 +15,9 @@ import {
   MOON,
   MOON_EYE,
   NEAR_MISS,
+  PERCEE,
+  PROGRESS_THREAD,
+  SAFE_BOTTOM,
   OBSTACLE_ART,
   SCORING,
   SHAKE,
@@ -36,11 +39,14 @@ import {
   recordRun,
   shouldEase
 } from "./save";
+import { ESSENCES, type Essence } from "./obstacleShapes";
+import { PerceeMarker, perceeTension } from "./percee";
+import { drawHomeIcon } from "./icons";
 import { RewardCues } from "./rewardCues";
-import { shareScoreImage } from "./share";
+import { loadLifetimeStats, recordRunStats, type LifetimeStats } from "./stats";
 import { Sfx } from "./sfx";
 import { ensureTextures, LIGHT_KEY, LIGHT_SIZE, SPARK_KEY } from "./textures";
-import { buttonWidth, fitText } from "./ui";
+import { fitText } from "./ui";
 import { Witch } from "./witchShape";
 
 /** Current interpolated parameters: difficulty + sky mood. */
@@ -51,6 +57,59 @@ const MOON_COLOR = 0xf5efd8;
 // HUD colours for the normal (dark) palette; MOON_EYE holds the inverted ones.
 const HUD_SCORE_COLOR = "#f5efd8";
 const HUD_MULT_COLOR = "#d9a7ff";
+
+/** Zeroed per-essence counters, for the run's graze breakdown. */
+function emptyEssenceCounts(): Record<Essence, number> {
+  const out = {} as Record<Essence, number>;
+  for (const essence of ESSENCES) out[essence] = 0;
+  return out;
+}
+
+/** Where the frozen thread sits on the death screen: clear of Replay. */
+const THREAD_DEATH_Y = 678;
+
+/**
+ * The death screen's way out. Icon only, faint, top-left — the far corner from
+ * Replay, which owns the bottom band.
+ */
+const DEATH_HOME = {
+  x: 48,
+  y: 54,
+  /** Touch target, well past the 48 px floor. */
+  touch: 64,
+  /** Icon scale. Bigger than it was, still a fraction of the Replay band. */
+  scale: 1.25,
+  /**
+   * Opacity. Raised from 0.45: at that level the icon was legible only if you
+   * already knew it was there. It has to be findable — "low presence" means
+   * quiet next to Replay, not invisible.
+   */
+  alpha: 0.85
+} as const;
+
+/**
+ * Minimum distance between ANY interactive element on the death screen and the
+ * Replay band. A mis-tap here does not cost a menu trip — it throws the player
+ * out of the replay loop entirely, which is the one thing the screen exists to
+ * protect.
+ */
+const REPLAY_CLEARANCE = 80;
+const REPLAY_TOP = 706;
+
+// --- Guard rail (dev only): nothing interactive may crowd Replay.
+if (import.meta.env.DEV) {
+  const homeBottom = DEATH_HOME.y + DEATH_HOME.touch / 2;
+  if (REPLAY_TOP - homeBottom < REPLAY_CLEARANCE) {
+    throw new Error(
+      `The death screen's Home button reaches y=${homeBottom}, only ` +
+        `${REPLAY_TOP - homeBottom}px above the Replay band — under the ` +
+        `${REPLAY_CLEARANCE}px clearance. Move it further from Replay.`
+    );
+  }
+  if (DEATH_HOME.touch < 48) {
+    throw new Error(`The death screen's Home touch target is ${DEATH_HOME.touch}px, under 48.`);
+  }
+}
 
 /** Free band where the death-screen witch roams (above all the text). */
 const DEATH_WITCH_Y = 168;
@@ -135,18 +194,19 @@ export class FlightScene extends Phaser.Scene {
   private multiplierText!: Phaser.GameObjects.Text;
   private deathPanel!: Phaser.GameObjects.Container;
   private deathScoreText!: Phaser.GameObjects.Text;
-  private deathCauseText!: Phaser.GameObjects.Text;
-  private deathStatsText!: Phaser.GameObjects.Text;
   private messageText!: Phaser.GameObjects.Text;
-  private historyBars!: Phaser.GameObjects.Graphics;
-  private historyLabels: Phaser.GameObjects.Text[] = [];
-  private shareLabel!: Phaser.GameObjects.Text;
-  private homeLabel!: Phaser.GameObjects.Text;
+  /** Bottom progress thread: static track redrawn per run, plus a moving dot. */
+  private threadGfx!: Phaser.GameObjects.Graphics;
+  private threadDot!: Phaser.GameObjects.Image;
+  /** Seconds the thread spans. Fixed at reset so the scale never slides. */
+  private threadSpan: number = PROGRESS_THREAD.minSpan;
+  /** True while a Percée crossing owns the screen: the thread steps aside. */
+  private perceeSlowMo = false;
+
+  private homeIcon!: Phaser.GameObjects.Graphics;
   private replayLabel!: Phaser.GameObjects.Text;
-  private deathBtnW = 148;
   private pauseTitleText!: Phaser.GameObjects.Text;
   private pauseHintText!: Phaser.GameObjects.Text;
-  private shareZone!: Phaser.Geom.Rectangle;
   private homeZone!: Phaser.Geom.Rectangle;
 
   /** Animated death-screen scenery: same spirit as the home screen. */
@@ -158,6 +218,30 @@ export class FlightScene extends Phaser.Scene {
   private bestComboThisRun = 0;
   /** Grazes completed in the current run — logged for tuning. */
   private grazesThisRun = 0;
+
+  // --- Lifetime-stats accumulators. Held in memory for the whole run and
+  // flushed to storage EXACTLY ONCE, in die(): no write ever happens mid-run.
+  private grazesByEssenceThisRun: Record<Essence, number> = emptyEssenceCounts();
+  private combosByTierThisRun: Record<number, number> = {};
+  private closestGrazeThisRun = Infinity;
+  private fullMoonTimeThisRun = 0;
+  private reachedFullMoonThisRun = false;
+  /** Timestamps (run seconds) of recent grazes, for the grazes-per-second peak. */
+  private readonly grazeTimes: number[] = [];
+  private bestGrazesPerSecondThisRun = 0;
+  /** True once the run has left the highest tier it reached. */
+  private clearedTierReached = false;
+  /** Lifetime stats, re-read at reset and refreshed by the write in die(). */
+  private lifetime: LifetimeStats = loadLifetimeStats();
+  /**
+   * Run seconds at which the Percée marker stands, or 0 when there is none —
+   * a first run, or a record too short to be worth a monument.
+   */
+  private perceeTime = 0;
+  private perceeCrossed = false;
+  private percee!: PerceeMarker;
+  /** 0 outside the approach, 1 at the marker. Atmosphere only. */
+  private perceeT = 0;
   /** What actually killed her, captured at the moment of contact. */
   private deathCause: DeathCause = "branch";
   /**
@@ -168,8 +252,6 @@ export class FlightScene extends Phaser.Scene {
   private easing = false;
   /** Furthest tier reached in the current run. */
   private bestTierThisRun = 0;
-  /** The last run beat the record (used by the share image). */
-  private lastRunWasRecord = false;
   private fpsText?: Phaser.GameObjects.Text;
   private debugGfx?: Phaser.GameObjects.Graphics;
 
@@ -295,6 +377,21 @@ export class FlightScene extends Phaser.Scene {
     // Just above the obstacles (3) so the halo does not swallow them, below the
     // trail (4) and the witch (5).
     this.cues = new RewardCues(this, 3.5);
+
+    // The record, standing in the forest. Behind the obstacles (3) so it can
+    // never compete with them for readability.
+    this.percee = new PerceeMarker(this, 2.5);
+
+    // The progress thread along the bottom edge. Also UNDER the obstacles: an
+    // obstacle crossing it must hide the thread, never the other way round.
+    this.threadGfx = this.add.graphics().setDepth(2.7);
+    this.threadDot = this.add
+      .image(0, this.threadY, SPARK_KEY)
+      .setDisplaySize(PROGRESS_THREAD.dotSize, PROGRESS_THREAD.dotSize)
+      .setTint(PROGRESS_THREAD.dotColor)
+      .setAlpha(PROGRESS_THREAD.dotAlpha)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(2.7);
 
     this.buildHud();
     this.buildDeathScene();
@@ -464,10 +561,21 @@ export class FlightScene extends Phaser.Scene {
     // Light veil: the animated scenery stays visible beneath, text stays crisp.
     const veil = this.add.rectangle(0, 0, WORLD.width, WORLD.height, 0x05030c, 0.34).setOrigin(0, 0);
 
-    // Contextual game-over line. Word-wrapped rather than shrunk, so a long
-    // sentence in any language stays readable instead of turning tiny.
+    // THE SCORE, very large. The one number worth a glance.
+    this.deathScoreText = this.add
+      .text(cx, 330, "0", {
+        fontFamily: "sans-serif",
+        fontStyle: "bold",
+        fontSize: "128px",
+        color: "#f5efd8"
+      })
+      .setOrigin(0.5);
+
+    // ONE line: the contextual message, or the gap to the record when there is
+    // one to chase. Word-wrapped rather than shrunk, so a long sentence in any
+    // language stays readable instead of turning tiny.
     this.messageText = this.add
-      .text(cx, 232, "", {
+      .text(cx, 438, "", {
         fontFamily: "sans-serif",
         fontStyle: "bold",
         fontSize: "22px",
@@ -477,90 +585,33 @@ export class FlightScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.deathScoreText = this.add
-      .text(cx, 318, "0", {
-        fontFamily: "sans-serif",
-        fontStyle: "bold",
-        fontSize: "96px",
-        color: "#f5efd8"
-      })
-      .setOrigin(0.5);
-
-    // Cause of death: the player must understand at a glance.
-    this.deathCauseText = this.add
-      .text(cx, 392, "", {
-        fontFamily: "sans-serif",
-        fontSize: "20px",
-        color: "#c9a0ff"
-      })
-      .setOrigin(0.5);
-
-    // Run summary: tier reached + best combo.
-    this.deathStatsText = this.add
-      .text(cx, 452, "", {
-        fontFamily: "sans-serif",
-        fontSize: "22px",
-        color: "#d9a7ff",
-        align: "center",
-        lineSpacing: 8
-      })
-      .setOrigin(0.5);
-
-    // Score history: a mini bar chart, oldest left, this run right. Bars are
-    // redrawn on each death; the labels are created once and reused.
-    this.historyBars = this.add.graphics();
-    this.historyLabels = [];
-    for (let i = 0; i < HISTORY.size; i++) {
-      this.historyLabels.push(
-        this.add
-          .text(0, HISTORY.baselineY + 8, "", {
-            fontFamily: "sans-serif",
-            fontSize: "12px",
-            color: HISTORY.labelColor
-          })
-          .setOrigin(0.5, 0)
-      );
-    }
-
-    // Two secondary buttons side by side, above the thumb zone.
-    // Shared width sized against the longest translation of BOTH labels across
-    // the 4 languages ("Compartir"/"Condividi" are wider than "Share").
-    const secondaryStyle = { fontFamily: "sans-serif", fontStyle: "bold", fontSize: "22px" };
-    const btnH = 62;
-    const btnY = 597;
-    const gap = 14;
-    const maxSecondary = Math.floor((WORLD.width - 48 - gap) / 2);
-    const btnW = Math.max(
-      buttonWidth(this, "death.share", secondaryStyle, 22, 130, maxSecondary),
-      buttonWidth(this, "death.home", secondaryStyle, 22, 130, maxSecondary)
+    // The way out: icon only, low opacity, no frame. BIG TARGET, LOW PRESENCE.
+    //
+    // Top-left, as far from Replay as the screen allows. Replay owns the whole
+    // bottom band and is what the player is reaching for; an exit anywhere near
+    // it gets hit by accident and throws them out of the loop. The gap is
+    // asserted below, not just intended.
+    this.homeIcon = this.add.graphics().setAlpha(DEATH_HOME.alpha);
+    drawHomeIcon(this.homeIcon, DEATH_HOME.x, DEATH_HOME.y, DEATH_HOME.scale, 1);
+    this.homeZone = new Phaser.Geom.Rectangle(
+      DEATH_HOME.x - DEATH_HOME.touch / 2,
+      DEATH_HOME.y - DEATH_HOME.touch / 2,
+      DEATH_HOME.touch,
+      DEATH_HOME.touch
     );
-    const shareCx = cx - (btnW + gap) / 2;
-    const homeCx = cx + (btnW + gap) / 2;
-    this.shareZone = new Phaser.Geom.Rectangle(shareCx - btnW / 2, btnY - btnH / 2, btnW, btnH);
-    this.homeZone = new Phaser.Geom.Rectangle(homeCx - btnW / 2, btnY - btnH / 2, btnW, btnH);
-
-    const shareBg = this.add
-      .rectangle(shareCx, btnY, btnW, btnH, 0xffffff, 0.08)
-      .setStrokeStyle(2, 0x9b6bff, 0.7);
-    this.shareLabel = this.add
-      .text(shareCx, btnY, "", { ...secondaryStyle, color: "#d9a7ff" })
-      .setOrigin(0.5);
-    const homeBg = this.add
-      .rectangle(homeCx, btnY, btnW, btnH, 0xffffff, 0.08)
-      .setStrokeStyle(2, 0x9b6bff, 0.7);
-    this.homeLabel = this.add
-      .text(homeCx, btnY, "", { ...secondaryStyle, color: "#d9a7ff" })
-      .setOrigin(0.5);
 
     // Replay: fills the whole bottom of the screen, within thumb reach.
     // No dedicated hit zone: any tap outside "Share"/"Home" restarts.
+    // Stops short of the safe-area inset: on a phone the last strip is the
+    // home indicator's, and a button there is half-swallowed by the system.
     const replayTop = 706;
+    const replayBottom = WORLD.height - SAFE_BOTTOM;
     const replayBg = this.add
-      .rectangle(0, replayTop, WORLD.width, WORLD.height - replayTop, 0x9b6bff, 0.16)
+      .rectangle(0, replayTop, WORLD.width, replayBottom - replayTop, 0x9b6bff, 0.16)
       .setOrigin(0, 0)
       .setStrokeStyle(2, 0x9b6bff, 0.5);
     this.replayLabel = this.add
-      .text(cx, replayTop + (WORLD.height - replayTop) / 2, "", {
+      .text(cx, (replayTop + replayBottom) / 2, "", {
         fontFamily: "sans-serif",
         fontStyle: "bold",
         fontSize: "44px",
@@ -568,27 +619,27 @@ export class FlightScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // A single container to toggle: restarting never reloads the scene.
+    // FOUR THINGS, and the way home. Everything else — best scores, history,
+    // cause of death, run summary, the tier road — moved to the Scores page,
+    // reachable from the home screen only. The death screen had become a wall
+    // of numbers between the player and the replay button.
+    //
+    // The Home label is the one addition to that list: without it a death
+    // screen offers replay and nothing else, and there would be no way back to
+    // the menu at all. It is a bare label, not a boxed button, so it reads as
+    // an exit rather than as a fifth thing to look at.
     this.deathPanel = this.add
       .container(0, 0, [
         veil,
         this.messageText,
         this.deathScoreText,
-        this.deathCauseText,
-        this.deathStatsText,
-        this.historyBars,
-        ...this.historyLabels,
-        shareBg,
-        this.shareLabel,
-        homeBg,
-        this.homeLabel,
+        this.homeIcon,
         replayBg,
         this.replayLabel
       ])
       .setDepth(30)
       .setVisible(false);
 
-    this.deathBtnW = btnW;
   }
 
   /** Freezes the run without killing: called when the tab goes background. */
@@ -637,10 +688,7 @@ export class FlightScene extends Phaser.Scene {
    * summary) are refreshed by refreshDeathTexts().
    */
   private refreshTexts(): void {
-    this.shareLabel.setText(t("death.share"));
-    fitText(this.shareLabel, this.deathBtnW - 20, 22);
-    this.homeLabel.setText(t("death.home"));
-    fitText(this.homeLabel, this.deathBtnW - 20, 22);
+    // The way home is an icon now: nothing to translate, nothing to fit.
     this.replayLabel.setText(t("death.replay"));
     fitText(this.replayLabel, WORLD.width - 48, 44);
 
@@ -660,15 +708,28 @@ export class FlightScene extends Phaser.Scene {
   }
 
   /** Labels that depend on the run shown on the death screen. */
-  private refreshDeathTexts(): void {
+  /**
+   * The death screen's two texts: the score, and the ONE line beneath it.
+   *
+   * That line is the gap to the record when there is one to chase — the most
+   * useful thing the screen can say, and the whole point of La Percée — and
+   * the contextual message otherwise. Never both: the screen shows four things
+   * and this is one of them.
+   *
+   * @param previousBestTime the record before this run, 0 when there is none
+   */
+  private refreshDeathTexts(previousBestTime = this.perceeTime): void {
     this.deathScoreText.setText(String(this.score));
-    fitText(this.deathScoreText, WORLD.width - 48, 96);
+    fitText(this.deathScoreText, WORLD.width - 48, 128);
 
-    // The message is re-rolled on a language change: same category, a fresh
-    // variant in the new language. Never rebuilt from fragments.
+    // ONE line, doing both jobs: what happened, and a reason to go again.
+    // A single template per variant carries both — the gap used to be a
+    // separate sentence glued in front, which is exactly what the
+    // anti-concatenation rule forbids.
+    const gap = Math.max(0, previousBestTime - this.runDuration);
     this.messageText.setText(
       deathMessage(this.deathCategory, {
-        score: this.score,
+        seconds: gap.toFixed(1),
         combo: this.bestComboThisRun,
         tier: t(TIERS[this.bestTierThisRun].nameKey)
       })
@@ -676,17 +737,6 @@ export class FlightScene extends Phaser.Scene {
     this.messageText.setColor(
       this.deathCategory === "newRecord" ? HISTORY.recordLabelColor : "#d9a7ff"
     );
-
-    this.deathCauseText.setText(
-      t(this.deathCause === "trunk" ? "death.causeTrunk" : "death.causeBranch")
-    );
-    fitText(this.deathCauseText, WORLD.width - 48, 20);
-
-    this.deathStatsText.setText(
-      `${t("death.tier", { tier: t(TIERS[this.bestTierThisRun].nameKey) })}\n` +
-        `${t("death.bestCombo", { combo: this.bestComboThisRun })}`
-    );
-    fitText(this.deathStatsText, WORLD.width - 48, 22);
   }
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
@@ -701,13 +751,9 @@ export class FlightScene extends Phaser.Scene {
 
     if (this.dead) {
       // No delay guard: the tap is live from the very first frame of the
-      // death screen. The message and the history never gate replaying.
-      // Only "Share" and "Home" divert the tap; everywhere else restarts, so
-      // the urge to replay never runs into a dead zone.
-      if (this.shareZone.contains(pointer.x, pointer.y)) {
-        void this.shareRun();
-        return;
-      }
+      // death screen. Nothing drawn there gates replaying.
+      // Only "Home" diverts the tap; everywhere else restarts, so the urge to
+      // replay never runs into a dead zone.
       if (this.homeZone.contains(pointer.x, pointer.y)) {
         // Back to the home screen: the scene SHUTDOWN removes the global pause
         // listeners, and the menu will re-read the up-to-date stats.
@@ -742,7 +788,34 @@ export class FlightScene extends Phaser.Scene {
     this.darkStreak = 0;
     this.bestComboThisRun = 0;
     this.grazesThisRun = 0;
+    this.grazesByEssenceThisRun = emptyEssenceCounts();
+    this.combosByTierThisRun = {};
+    this.closestGrazeThisRun = Infinity;
+    this.fullMoonTimeThisRun = 0;
+    this.reachedFullMoonThisRun = false;
+    this.grazeTimes.length = 0;
+    this.bestGrazesPerSecondThisRun = 0;
+    this.clearedTierReached = false;
     this.bestTierThisRun = 0;
+
+    // Where the record stands this run. Re-read here so a record set last run
+    // has already moved the marker. Below the threshold there is simply none,
+    // and nothing anywhere mentions it.
+    this.lifetime = loadLifetimeStats();
+    this.perceeTime = this.lifetime.bestTime >= PERCEE.minTime ? this.lifetime.bestTime : 0;
+    this.perceeCrossed = false;
+    this.perceeT = 0;
+    this.perceeSlowMo = false;
+    this.percee.reset();
+    this.sfx.setTension(0);
+
+    // The thread's scale is fixed here so it never slides under the dot.
+    this.threadSpan = Math.max(
+      PROGRESS_THREAD.minSpan,
+      this.perceeTime * PROGRESS_THREAD.spanFactor
+    );
+    this.drawThread();
+    this.updateThread();
     this.runDuration = 0;
     // Read once per run, from the death log. Nothing tells the player.
     this.easing = shouldEase();
@@ -781,16 +854,6 @@ export class FlightScene extends Phaser.Scene {
     this.refreshHud();
     this.refreshComboVisuals();
     this.refreshMagic();
-  }
-
-  /** Shares the run currently shown on the death screen. */
-  private async shareRun(): Promise<void> {
-    await shareScoreImage({
-      score: this.score,
-      tierName: t(TIERS[this.bestTierThisRun].nameKey),
-      bestCombo: this.bestComboThisRun,
-      isRecord: this.lastRunWasRecord
-    });
   }
 
   /**
@@ -855,13 +918,22 @@ export class FlightScene extends Phaser.Scene {
     if (this.easing && this.runDuration >= MERCY.clearSeconds) this.easing = false;
 
     const target = this.tierIndexFor(this.runTime);
-    this.bestTierThisRun = Math.max(this.bestTierThisRun, target);
+    if (target > this.bestTierThisRun) {
+      // Leaving a tier means it was cleared; the new one has not been yet.
+      this.clearedTierReached = false;
+      this.bestTierThisRun = target;
+    }
     if (target !== this.tierIndex) {
       this.diffFrom = { ...this.diffCurrent };
       this.tierIndex = target;
       this.transitionT = 0;
       this.announceTier(TIERS[target].nameKey);
     }
+    // The final tier is a plateau with no exit: surviving into it is clearing
+    // it, otherwise it could never be marked cleared at all.
+    if (this.bestTierThisRun === TIERS.length - 1) this.clearedTierReached = true;
+
+    if (this.fullMoon) this.fullMoonTimeThisRun += dt;
 
     if (this.transitionT < TIER_FX.transitionS) {
       this.transitionT = Math.min(TIER_FX.transitionS, this.transitionT + dt);
@@ -954,9 +1026,14 @@ export class FlightScene extends Phaser.Scene {
    * then a near miss on the record, then a long chain, then a run that ended
    * before it started. `previousBest` is the record from BEFORE this run.
    */
-  private pickDeathCategory(newBestScore: boolean, previousBest: number): DeathCategory {
-    if (newBestScore) return "newRecord";
-    if (previousBest > 0 && this.score >= previousBest * DEATH_MESSAGE.nearRecordRatio) {
+  private pickDeathCategory(previousBestTime: number): DeathCategory {
+    // The record is a TIME (see La Percée), so the categories are measured in
+    // seconds too — that is what lets the line quote the gap and stay honest.
+    // `nearRecord` is the only category that can quote `{seconds}`, and it can
+    // only be reached when a record actually exists.
+    const hasRecord = previousBestTime >= PERCEE.minTime;
+    if (hasRecord && this.runDuration > previousBestTime) return "newRecord";
+    if (hasRecord && this.runDuration >= previousBestTime * DEATH_MESSAGE.nearRecordRatio) {
       return "nearRecord";
     }
     if (this.bestComboThisRun >= DEATH_MESSAGE.bigComboThreshold) return "bigCombo";
@@ -965,43 +1042,21 @@ export class FlightScene extends Phaser.Scene {
   }
 
   /**
-   * Mini bar chart of the last runs, oldest left. The best of the five is
-   * highlighted. Drawn synchronously here — nothing about it is animated and
-   * nothing about it delays the replay tap.
+   * The fourth and last thing on the death screen: the progress thread, frozen
+   * where the run ended, with the record's notch still on it.
+   *
+   * It is the SAME thread that ran along the bottom edge during play, simply
+   * stopped — so the death screen shows the run's distance rather than telling
+   * it. Nothing is animated and nothing is redrawn: the dot is already in
+   * place, so this only lifts it above the death veil.
    */
-  private drawHistory(history: number[]): void {
-    this.historyBars.clear();
-    for (const label of this.historyLabels) label.setVisible(false);
-    if (history.length === 0) return;
-
-    const best = Math.max(...history);
-    const span = HISTORY.barWidth + HISTORY.barGap;
-    const totalWidth = history.length * HISTORY.barWidth + (history.length - 1) * HISTORY.barGap;
-    const startX = (WORLD.width - totalWidth) / 2 + HISTORY.barWidth / 2;
-
-    history.forEach((score, index) => {
-      const x = startX + index * span;
-      // Scale against the best of the window; a zero score still shows a sliver.
-      const ratio = best > 0 ? score / best : 0;
-      const height = Math.max(HISTORY.minBarHeight, Math.round(ratio * HISTORY.maxBarHeight));
-      const isBest = score === best;
-
-      this.historyBars.fillStyle(isBest ? HISTORY.recordColor : HISTORY.color, isBest ? 0.95 : 0.5);
-      this.historyBars.fillRoundedRect(
-        x - HISTORY.barWidth / 2,
-        HISTORY.baselineY - height,
-        HISTORY.barWidth,
-        height,
-        3
-      );
-
-      const label = this.historyLabels[index];
-      label
-        .setText(String(score))
-        .setPosition(x, HISTORY.baselineY + 6)
-        .setColor(isBest ? HISTORY.recordLabelColor : HISTORY.labelColor)
-        .setVisible(true);
-    });
+  private freezeThread(): void {
+    // Lifted clear of the Replay band, which owns the bottom of the death
+    // screen. The Graphics keeps its absolute coordinates, so it is shifted by
+    // the delta rather than redrawn.
+    const lift = THREAD_DEATH_Y - this.threadY;
+    this.threadGfx.setVisible(true).setDepth(31).setY(lift);
+    this.threadDot.setVisible(true).setDepth(31).setY(THREAD_DEATH_Y);
   }
 
   private die(): void {
@@ -1011,14 +1066,30 @@ export class FlightScene extends Phaser.Scene {
     this.tweens.timeScale = 1;
     this.sfx.death();
 
+    // Captured BEFORE either write: the record this run was actually chasing.
+    // The message is indexed on TIME (see La Percée), not on score.
+    const previousBestTime = this.lifetime.bestTime;
+    this.deathCategory = this.pickDeathCategory(previousBestTime);
+
     // Persistence: the run is recorded exactly once, here.
-    const { newBestScore, history, previousBest } = recordRun(
-      this.score,
-      this.bestComboThisRun,
-      this.bestTierThisRun
-    );
-    this.lastRunWasRecord = newBestScore;
-    this.deathCategory = this.pickDeathCategory(newBestScore, previousBest);
+    // `history` is still written for the Scores page; the death screen no
+    // longer shows it.
+    recordRun(this.score, this.bestComboThisRun, this.bestTierThisRun);
+
+    // Lifetime stats: the ONE write of the run, here and nowhere else.
+    this.lifetime = recordRunStats({
+      duration: this.runDuration,
+      tierReached: this.bestTierThisRun,
+      clearedTierReached: this.clearedTierReached,
+      combosByTier: this.combosByTierThisRun,
+      grazes: this.grazesThisRun,
+      grazesByEssence: this.grazesByEssenceThisRun,
+      bestCombo: this.bestComboThisRun,
+      reachedFullMoon: this.reachedFullMoonThisRun,
+      fullMoonTime: this.fullMoonTimeThisRun,
+      closestGraze: this.closestGrazeThisRun,
+      bestGrazesPerSecond: this.bestGrazesPerSecondThisRun
+    });
 
     // Tuning log. `runDuration` is real flown seconds, so DEBUG_START_TIER
     // cannot pollute the measurement.
@@ -1029,8 +1100,8 @@ export class FlightScene extends Phaser.Scene {
       grazes: this.grazesThisRun
     });
 
-    this.refreshDeathTexts();
-    this.drawHistory(history);
+    this.refreshDeathTexts(previousBestTime);
+    this.freezeThread();
 
     // Resting scenery: hide the lost run and stop the gameplay emitters,
     // which would otherwise keep running behind an opaque sky.
@@ -1068,6 +1139,23 @@ export class FlightScene extends Phaser.Scene {
 
     this.bestComboThisRun = Math.max(this.bestComboThisRun, this.combo);
     this.grazesThisRun += 1;
+
+    // --- Lifetime stats, accumulated in memory only.
+    this.grazesByEssenceThisRun[this.diffCurrent.essence] += 1;
+    this.combosByTierThisRun[this.tierIndex] = Math.max(
+      this.combosByTierThisRun[this.tierIndex] ?? 0,
+      this.combo
+    );
+    this.closestGrazeThisRun = Math.min(this.closestGrazeThisRun, obstacle.minDistance);
+    // Peak grazes inside any one-second window: keep only the last second.
+    this.grazeTimes.push(this.runDuration);
+    while (this.grazeTimes.length > 0 && this.runDuration - this.grazeTimes[0] > 1) {
+      this.grazeTimes.shift();
+    }
+    this.bestGrazesPerSecondThisRun = Math.max(
+      this.bestGrazesPerSecondThisRun,
+      this.grazeTimes.length
+    );
 
     const points = Math.round(SCORING.grazePoints * this.multiplier);
     this.score += points;
@@ -1249,6 +1337,7 @@ export class FlightScene extends Phaser.Scene {
   private setFullMoon(on: boolean, instant = false): void {
     if (this.fullMoon === on && !instant) return;
     this.fullMoon = on;
+    if (on) this.reachedFullMoonThisRun = true;
 
     this.witch.setFullMoon(on);
 
@@ -1288,7 +1377,20 @@ export class FlightScene extends Phaser.Scene {
   private refreshMagic(): void {
     const ratio = Phaser.Math.Clamp(this.magic / MAGIC.max, 0, 1);
 
-    this.magicFill.setDisplaySize(MAGIC.barWidth * ratio, MAGIC.barHeight);
+    // The combo timer reads as URGENCY: warm, and it pulses as it runs out.
+    // The bottom progress thread is its opposite — cold and still — so the two
+    // can never be confused for one another.
+    let height = MAGIC.barHeight;
+    let barAlpha = 0.9;
+    if (this.combo > 0 && ratio > 0 && ratio < MAGIC.pulseBelow) {
+      const beat = 0.5 + 0.5 * Math.sin(this.time.now / 1000 * Math.PI * 2 * MAGIC.pulseHz);
+      // Urgency grows as the gauge empties: the closer to zero, the harder it
+      // beats, so it is felt without being read.
+      const bite = 1 - ratio / MAGIC.pulseBelow;
+      height += MAGIC.pulseGrow * beat * bite;
+      barAlpha = Phaser.Math.Linear(0.9, MAGIC.pulseAlphaMin, beat * bite);
+    }
+    this.magicFill.setDisplaySize(MAGIC.barWidth * ratio, height).setAlpha(barAlpha);
 
     let alpha = Phaser.Math.Linear(MAGIC.darkAlphaEmpty, MAGIC.darkAlphaFull, ratio);
     // While flickering the veil pulses: the night "breathes" before falling.
@@ -1400,15 +1502,134 @@ export class FlightScene extends Phaser.Scene {
     this.flickerPhase = this.flickering ? this.flickerPhase + dt : 0;
     this.updateFlicker();
 
+    // The crossing's slow motion is over: the thread comes back.
+    if (this.perceeSlowMo && this.slowMoLeft <= 0) this.perceeSlowMo = false;
+
+    this.updatePercee(dt, time);
+    this.updateThread();
+
     // Reward cues last: they follow the obstacles and the witch, so they read
     // this frame's positions rather than the previous one's.
     this.cues.sync(this.spawner.all);
-    this.cues.update(dt, time, this.witch.x, this.witch.y, this.multiplier);
+    this.cues.update(dt, time, this.witch.x, this.witch.y, this.multiplier, this.perceeT);
 
     this.refreshHud();
     this.refreshMagic();
     this.applyAmbiance();
     if (DEBUG_HITBOX) this.drawDebug();
+  }
+
+  /** Where the thread sits: above the safe-area inset, always. */
+  private get threadY(): number {
+    return WORLD.height - SAFE_BOTTOM - PROGRESS_THREAD.liftAboveSafe;
+  }
+
+  private threadX(seconds: number): number {
+    const left = PROGRESS_THREAD.marginX;
+    const width = WORLD.width - PROGRESS_THREAD.marginX * 2;
+    return left + (Phaser.Math.Clamp(seconds, 0, this.threadSpan) / this.threadSpan) * width;
+  }
+
+  /**
+   * The static part of the thread: the hairline, the tier ticks, and the notch
+   * where the record stands. Drawn ONCE per run — only the dot moves, which is
+   * what keeps the bottom edge calm next to the urgency of the combo timer.
+   */
+  private drawThread(): void {
+    const th = PROGRESS_THREAD;
+    const g = this.threadGfx;
+    const y = this.threadY;
+    g.clear();
+
+    const left = th.marginX;
+    const width = WORLD.width - th.marginX * 2;
+    g.fillStyle(th.trackColor, th.trackAlpha);
+    g.fillRect(left, y - th.height / 2, width, th.height);
+
+    // Tier boundaries: the shape of the forest ahead.
+    g.fillStyle(th.tickColor, th.tickAlpha);
+    for (const tier of TIERS) {
+      if (tier.startTime <= 0 || tier.startTime > this.threadSpan) continue;
+      g.fillRect(this.threadX(tier.startTime) - 0.5, y - th.tickHeight / 2, 1, th.tickHeight);
+    }
+
+    // The record. Only drawn when there is one worth showing — same threshold
+    // as the arch, so the whole Percée appears in one piece.
+    if (this.perceeTime > 0 && this.perceeTime <= this.threadSpan) {
+      g.fillStyle(th.notchColor, th.notchAlpha);
+      g.fillRect(this.threadX(this.perceeTime) - 1, y - th.notchHeight / 2, 2, th.notchHeight);
+    }
+  }
+
+  /** The moving point of light: the witch on her road. */
+  private updateThread(): void {
+    // Back to the bottom edge after a death screen lifted it.
+    this.threadGfx.setY(0).setDepth(2.7);
+    this.threadDot.setDepth(2.7);
+
+    // A Percée crossing owns the screen; the thread gets out of the way.
+    const hidden = this.perceeSlowMo;
+    this.threadGfx.setVisible(!hidden);
+    this.threadDot.setVisible(!hidden);
+    if (hidden) return;
+
+    // Past the record the run is in new country: stretch rather than clamp,
+    // so the dot keeps moving instead of sticking to the end.
+    if (this.runDuration > this.threadSpan) {
+      this.threadSpan = this.runDuration * PROGRESS_THREAD.spanFactor;
+      this.drawThread();
+    }
+    this.threadDot.setPosition(this.threadX(this.runDuration), this.threadY);
+  }
+
+  /**
+   * The record, standing in the forest.
+   *
+   * Nothing here has any effect on gameplay: no collision, no scoring, no
+   * change to generation. The tension it builds is atmosphere only and touches
+   * the SCENERY alone — obstacles and their halos are never dimmed, per the
+   * readability invariant.
+   */
+  private updatePercee(dt: number, time: number): void {
+    if (this.perceeTime <= 0) return;
+
+    this.perceeT = this.reducedMotion ? 0 : perceeTension(this.runDuration, this.perceeTime);
+    this.percee.update(
+      this.runDuration,
+      this.perceeTime,
+      this.diffCurrent.speed,
+      time,
+      this.perceeT
+    );
+    // The world's sound hollows out as she closes on it.
+    this.sfx.setTension(this.perceeT);
+
+    if (!this.perceeCrossed && this.runDuration >= this.perceeTime) {
+      this.perceeCrossed = true;
+      this.crossPercee();
+    }
+    void dt;
+  }
+
+  /** Passing her own record: the one moment a word is allowed on screen. */
+  private crossPercee(): void {
+    if (!this.reducedMotion) {
+      this.slowMoLeft = PERCEE.slowMoMs / 1000;
+      this.perceeSlowMo = true;
+    }
+    this.percee.burst();
+    this.sfx.setTension(0);
+    this.perceeT = 0;
+
+    // Full trail blaze, whatever the combo is doing.
+    this.trailEmitter.setParticleTint(TRAIL.colorMax);
+    this.trailEmitter.frequency = TRAIL.frequencyMax;
+
+    this.spawnFloater(WITCH.x + 60, this.witch.y - 40, t("percee"), {
+      fontSize: "30px",
+      fontStyle: "bold",
+      color: "#ffe9a8"
+    });
   }
 
   /**

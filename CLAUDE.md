@@ -10,7 +10,7 @@ Criterion #2: *does a new player understand within 10 seconds that grazing is wh
 - Phaser 3 + TypeScript + Vite. Target: 60 fps on a mid-range phone.
 - `npm run dev` to develop, `npm run build` to validate (tsc + vite).
 - Capacitor in Phase 7 only. No backend, no server dependency.
-- **No image files.** Every visual is generated procedurally at boot (`textures.ts`, `obstacleShapes.ts`, `witchShape.ts`).
+- **No image files.** Every visual is generated procedurally at boot (`textures.ts`, `obstacleShapes.ts`, `witchShape.ts`, `icons.ts`).
 
 ## Development rules (IMPORTANT)
 1. **One phase at a time.** Never implement features from a future phase without an explicit request.
@@ -20,6 +20,7 @@ Criterion #2: *does a new player understand within 10 seconds that grazing is wh
 5. After every change: check that `npm run build` passes and explain how to test manually.
 6. **All source code in English** — comments, identifiers, documentation. The only French, Spanish and Italian text in the repo is the translation strings inside `i18n.ts`.
 7. **Moonwick is a brand name, never translated, never routed through i18n.** It lives in `BRAND` (config.ts) and is treated typographically as a logo, not as interface text.
+8. **Update CHANGELOG.md every session**, following the format already in the file. When a gameplay constant changes, record its before/after values and the reason (playtest feedback, bug, design decision). Name the files touched.
 
 ## Game rules (current state — authoritative)
 
@@ -29,23 +30,27 @@ Hold = climb, release = descend. Gentle gravity, clamped speed.
 ### Death
 **Only by contact with an obstacle.** There is no other source of death in the game.
 - Lethal hitbox: an 8 px radius circle centred on the witch's TORSO — not on her drawing's bounding box — deliberately smaller than the visual (perceived generosity). Hat, cape and broom are never lethal. See "The witch".
-- Death screen: contextual message + score + cause + run summary + score history + a giant Replay button. Restart < 300 ms. The replay tap must never be read as a flight input.
-- **Nothing on the death screen may delay replaying.** The tap is live on the very first frame: no delay guard, no timer, no mandatory animation. The message and the history are drawn synchronously in `die()`.
+- Death screen: five things only — see "The death screen". Restart < 300 ms. The replay tap must never be read as a flight input.
+- **Nothing on the death screen may delay replaying.** The tap is live on the very first frame: no delay guard, no timer, no mandatory animation. Everything is drawn synchronously in `die()`.
 
-### Contextual game-over message
-One line above the score, picked by situation. Categories live in `DEATH_MESSAGES` (i18n.ts), each holding 2-3 variants drawn at random. Thresholds live in `DEATH_MESSAGE` (config.ts).
+### The death screen's one line
+It is the only prose on that screen, so a single sentence does **both jobs at once**: it says what happened (the gap to the record, the combo, the tier) and it gives a reason to go again. Two short lines at most.
+
+**TONE: warm, brief, never mocking.** Someone who just missed their record by a second must not feel teased. « Il te restait 7 s. Tu y étais presque. » — not a punchline at their expense.
+
+Categories live in `DEATH_MESSAGES` (i18n.ts), 2-3 variants each, drawn at random. Thresholds live in `DEATH_MESSAGE` (config.ts). They are indexed on **TIME**, like La Percée — that is what lets the line quote the gap in seconds and stay honest.
 
 Fixed priority, first match wins:
-1. `newRecord` — the run beat the stored record.
-2. `nearRecord` — score >= `nearRecordRatio` (0.85) of the record, without beating it.
+1. `newRecord` — the run beat the stored `bestTime`.
+2. `nearRecord` — duration >= `nearRecordRatio` (0.85) of it, without beating it. **The only category that may use `{seconds}`**, and the only one that cannot be reached without a record.
 3. `bigCombo` — best combo of the run >= `bigComboThreshold` (8).
 4. `earlyDeath` — the run lasted less than `earlyDeathSeconds` (10 s).
 5. `default` — anything else.
 
-**ANTI-CONCATENATION RULE (absolute).** A message is never assembled from fragments. Each variant is a complete sentence written out in full in every language, using only the `{score}`, `{combo}` and `{tier}` placeholders. Word order, punctuation and agreement differ per language, so glueing pieces together breaks sentences somewhere. To add a case, add a whole new template — never a fragment.
+**ANTI-CONCATENATION RULE (absolute).** A message is never assembled from fragments. Each variant is a complete sentence written out in full in every language, using only the `{seconds}`, `{combo}` and `{tier}` placeholders. Word order, punctuation and agreement differ per language, so glueing pieces together breaks sentences somewhere. To add a case, add a whole new template — never a fragment. The gap used to be a separate sentence pasted in front of the message; folding it into the templates is what removed that seam.
 
 ### Score history
-The last `HISTORY.size` (5) scores are kept in `moonwick:history` and shown on the death screen as a mini bar chart, oldest on the left, the run that just ended on the right. The best of the five is highlighted in gold. Bars are redrawn on each death; the five labels are created once and reused, so nothing accumulates between runs.
+The last `HISTORY.size` (5) scores are kept in `moonwick:history` and shown on the **Scores page**, newest first. They used to be a bar chart on the death screen; that screen now shows five things and this is not one of them.
 
 ### Graze (near-miss)
 - Graze zone: a ring 10 < d <= 38 px from the obstacle **surface** (a real point-to-rectangle distance, not centre to centre).
@@ -83,9 +88,10 @@ gain makes them want it. `src/rewardCues.ts` holds the replacement.
 
 **NO WORDS DURING PLAY.** The only text visible in a live run is numeric: the
 score, the multiplier, the floating gains and the value tag. Anything that
-reads as an instruction is a bug. (The one non-numeric string that can still
-appear is the tier name at a tier change — atmosphere and progression, not
-instruction. If that should go too, it lives in `announceTier`.)
+reads as an instruction is a bug. Two non-numeric strings are allowed, neither
+of them an instruction: the tier name at a tier change (`announceTier`), and
+`percee` when the player crosses their own record — at most once per run, and
+never on a first run.
 
 - **Fireflies.** Two or three per obstacle, floating in the graze ring with a
   slow drift, collected into the witch with a crystalline chime when she enters
@@ -187,6 +193,165 @@ a hunch.
 Note the interaction with the home screen: on the logo the tap decision waits
 for the *release* (short press plays, long press opens the readout). Everywhere
 else the tap still starts the run on press, so the game keeps its instant feel.
+
+## La Percée — the record is a PLACE, not a number
+
+The personal best is a duration (`bestTime`), which is what the tiers are
+already indexed on. It is not shown as a figure anywhere during play: it stands
+in the forest, at that exact moment of the run, as an arch of frozen fireflies
+and moonlight spanning the screen (`src/percee.ts`).
+
+**It is purely visual.** No collision shape, no scoring, no effect on
+generation. The player flies straight through it — that is the point.
+
+**Positioned by TIME, not spawned:** `x = WITCH.x + (perceeTime - runDuration) *
+scrollSpeed`, so it lands on the witch at exactly `bestTime` whatever the speed
+is doing. Tier transitions, the adaptive easing and `GLOBAL_SPEED` all change
+speed mid-run, and a marker spawned once at a fixed distance would drift off
+the record it represents.
+
+- **Approach** (`PERCEE.approach`, 4 s): the sound hollows out, the scenery
+  desaturates, the obstacle fireflies lean forward. All of it is atmosphere and
+  touches the SCENERY only — obstacles and halos are never dimmed.
+- **Crossing:** 400 ms of slow motion, full trail blaze, the arch bursts, and
+  the word `percee` appears. This is the **one exception** to the no-words-
+  during-play rule; it happens at most once per run and never on a first run.
+- **Below `PERCEE.minTime` (8 s), or with no record at all: nothing.** No arch,
+  no notch, no caption. The feature appears in one piece at one threshold —
+  gating the caption separately would have told a first-time player they "went
+  further than ever" on their very first run, which is true and meaningless.
+
+### The death screen: FIVE THINGS
+
+It had grown into a wall of numbers standing between the player and the replay
+button. Its content is now closed:
+
+1. **the score**, very large;
+2. **one line** — the contextual message, which carries the gap to the record
+   inside its own sentence. Two short lines at most. See "The death screen's
+   one line";
+3. **the Replay band** across the bottom;
+4. **the progress thread, frozen** where the run ended, with the record's notch
+   still on it — the same thread that ran along the bottom edge during play,
+   simply stopped, lifted clear of the Replay band;
+5. **the way home**: an icon, no label, no frame, `DEATH_HOME.alpha` 0.85.
+
+**BIG TARGET, LOW PRESENCE.** The home button is a 64 px touch square around a
+house icon, in the TOP-LEFT corner — the furthest point from Replay,
+which owns the bottom band. A mis-tap there does not cost a menu trip, it
+throws the player out of the replay loop, which is the one thing this screen
+exists to protect. A dev assertion enforces `REPLAY_CLEARANCE` (80 px) between
+any interactive element and the Replay band, and a touch target of at least
+48 px.
+
+**"Low presence" means quiet next to Replay, not invisible.** Both interface
+icons (`src/icons.ts`) are drawn dark-on-dark, which at low opacity made them
+findable only if you already knew they were there. They now carry a faint full
+outline under a thick moon-side rim (`ICON_STROKE`), and the home icon sits at
+alpha 0.85. Replay stays dominant by AREA — its band is over 200x the home
+target — not by starving the icons of contrast.
+
+**Nothing else may be added here.** Best scores, run history, cause of death,
+run summary and the tier road all moved to the Scores page. Adding a number back
+to this screen is a regression, not a feature.
+
+**There is no path to the Scores page from the death screen.** After dying the
+only two moves are Replay or Home — reading happens on purpose, from the menu.
+
+The replay tap stays live on the very first frame: everything above is drawn
+synchronously in `die()`, with no tween, no timer and no mandatory animation.
+
+### The Scores page (`src/ScoresScene.ts`)
+
+**The displayed name lives in ONE i18n key (`scores`).** The scene class, its
+scene key and the file name are deliberately neutral, so the page can be
+renamed — it was called "Grimoire" for exactly one session — without touching a
+line of code. The button that opens it and the page title read the same key.
+
+The player's single progression hub, reachable **from the home screen only**.
+It holds the best scores, the recent runs and the detailed lifetime statistics,
+and it is where the share-image button now lives (it shares the BEST run rather
+than the last one).
+
+**It is PAGED, deliberately.** Collection pages are coming, and `PAGES` is the
+whole navigation model: a page is `{ titleKey, build() }`, and adding one means
+adding an entry. The pager, the dots, the arrows and the back button adapt on
+their own; with a single page the pager hides itself.
+
+A dev assertion refuses a page whose rows would reach the buttons — that is
+exactly how the death screen got overloaded, and splitting a page is the fix,
+not shrinking the rows.
+
+Current pages: **Records** (best score, best combo, longest flight, recent
+runs), **Journal** (runs, time, grazes, Full Moons, closest graze), **The
+forest** (per tier and per species).
+
+Note: `save.ts` and `stats.ts` both track a best combo, from different eras of
+the codebase. The page reads the larger of the two so it can never show
+them disagreeing on the same screen.
+
+The gap to the record is spelled out in a whole sentence (`percee_gap`,
+`percee_record`) — never assembled from fragments. (An earlier version drew a
+full tier-segmented road on the death screen; that road was removed when the
+screen was cut back to four things. The frozen thread carries the same idea in
+a hairline.)
+
+### The progress thread, bottom edge
+
+A hairline across the full width, small ticks at the tier boundaries, a lit
+notch at the record, and one moving point of light: the witch on her road. No
+text, no numbers, no opaque background — it is scenery, not a HUD.
+
+**The two readouts are deliberately opposite**, because they mean opposite
+things and must never be confused:
+
+| | combo timer | progress thread |
+| --- | --- | --- |
+| where | top | bottom edge |
+| shape | short, centred bar | full-width hairline |
+| palette | **warm** amber | **cold** violet |
+| motion | pulses harder as it empties | still, except the dot |
+| meaning | running out | going forward |
+
+**Priority to the game:** the thread is drawn UNDER the obstacles and their
+halos (depth 2.7 against 3), so an obstacle crossing it hides the thread and
+never the reverse. It disappears completely during a Percée crossing.
+
+Its scale is fixed at the start of a run so it never slides under the dot; past
+the record it stretches rather than pinning the dot to the end.
+
+### `SAFE_BOTTOM` (IMPORTANT)
+
+Every element pinned to the bottom of the screen sits above `SAFE_BOTTOM`
+(config.ts) — the progress thread, the Replay band, anything added later. On a
+phone that last strip belongs to the home indicator: it is both visually
+occupied and a system gesture area, so a control there is half-hidden and
+half-swallowed. It is a constant rather than a runtime query because Capacitor
+lands in P7; this is the single place to widen when real
+`env(safe-area-inset-bottom)` values arrive.
+
+### Lifetime statistics (`src/stats.ts`, `moonwick:stats`)
+
+Games played, total play time, best time; per tier reached/cleared/best combo;
+grazes total and per essence; best combo, Full Moons and time spent in them;
+closest graze ever and best grazes-in-one-second.
+
+- **Written EXACTLY ONCE per run, at death.** Nothing here touches localStorage
+  while the game runs: a synchronous write inside a 60 fps loop is a frame
+  hitch waiting to happen, and losing one run's numbers to a crash matters far
+  less than a stutter.
+- **Versioned and tolerant.** `loadLifetimeStats()` fills in whatever is
+  missing instead of rejecting the payload: an older save, a hand-edited file
+  or a field added later degrades to defaults for the missing parts and keeps
+  everything still understood. It never throws and never wipes.
+- `Infinity` (never grazed) round-trips through `null`, which is a legitimate
+  state rather than corruption.
+- `DEBUG_STATS_DUMP` prints them on boot and exposes `window.__moonwickStats`
+  with `dump()` / `reset()`.
+
+Note the naming: `save.ts` already has a small `Stats`/`loadStats` pair for the
+score screen. The lifetime ones are `LifetimeStats` / `loadLifetimeStats` so the
+two can never be imported by mistake for one another.
 
 ### The witch (`src/witchShape.ts`)
 
@@ -290,6 +455,7 @@ Every key is prefixed `moonwick:` and handled in `src/save.ts` — never touch `
 | `moonwick:lang` | `"en"` / `"fr"` / `"es"` / `"it"` — explicit choice in the settings, wins permanently over `navigator.language` |
 | `moonwick:history` | JSON array of the last `HISTORY.size` scores, oldest first. Malformed or hand-edited content degrades to an empty list, never throws |
 | `moonwick:deaths` | JSON array of the last `DEATHS.size` (50) deaths, oldest first: `{ t, tier, cause, grazes }`. Tuning source of truth, and what `MERCY` is derived from. Individual malformed entries are dropped rather than poisoning the list |
+| `moonwick:stats` | Versioned lifetime statistics (`version: 1`), written once per run at death. Missing fields degrade to defaults rather than wiping the object. See "Lifetime statistics" |
 
 ## Accessibility and quality (permanent floor)
 - `prefers-reduced-motion` honoured for screen shake and slow motion.
