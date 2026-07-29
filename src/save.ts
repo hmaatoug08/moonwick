@@ -238,6 +238,15 @@ export function setSoundEnabled(on: boolean): void {
   write("sound", on ? "1" : "0");
 }
 
+/** Music toggle, separate from the effects: `moonwick:music`, on by default. */
+export function isMusicEnabled(): boolean {
+  return read("music") !== "0";
+}
+
+export function setMusicEnabled(on: boolean): void {
+  write("music", on ? "1" : "0");
+}
+
 /**
  * Language explicitly chosen by the player, or null if never chosen (in which
  * case i18n falls back to browser detection).

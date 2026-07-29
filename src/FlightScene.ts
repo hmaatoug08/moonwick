@@ -46,6 +46,7 @@ import { PerceeMarker, perceeTension } from "./percee";
 import { drawHomeIcon } from "./icons";
 import { RewardCues } from "./rewardCues";
 import { loadLifetimeStats, recordRunStats, type LifetimeStats } from "./stats";
+import { music } from "./music";
 import { addMoon, NightScenery } from "./scenery";
 import { Sfx } from "./sfx";
 import { ensureTextures, LIGHT_KEY, LIGHT_SIZE, SPARK_KEY } from "./textures";
@@ -693,11 +694,14 @@ export class FlightScene extends Phaser.Scene {
     // release — otherwise a "ghost" finger would make the witch climb.
     this.armed = false;
     this.pausePanel.setVisible(true);
+    // Written straight to the param: the update loop is about to freeze.
+    music.duck(true);
   }
 
   private resumeRun(): void {
     this.paused = false;
     this.pausePanel.setVisible(false);
+    music.duck(false);
   }
 
   private buildPausePanel(): void {
@@ -785,8 +789,9 @@ export class FlightScene extends Phaser.Scene {
   }
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
-    // The audio context can only open on a user gesture.
+    // The audio contexts can only open on a user gesture.
     this.sfx.unlock();
+    music.unlock();
 
     if (this.paused) {
       // This tap only resumes: it does not steer.
@@ -815,6 +820,10 @@ export class FlightScene extends Phaser.Scene {
 
   /** In-place restart: neither the scene nor the scenery is rebuilt. */
   private resetRun(): void {
+    // The bed swells from rest to the run level — no cut, no restart — and
+    // the patterns reseed: two runs must never sound identical.
+    music.setMode("run");
+    music.reseed();
     this.spawner.reset();
     this.trailEmitter.killAll();
 
@@ -1115,6 +1124,10 @@ export class FlightScene extends Phaser.Scene {
     this.slowMoLeft = 0;
     this.tweens.timeScale = 1;
     this.sfx.death();
+    // The bed falls back to the rest variant under the death screen — the
+    // same audible rest as the home screen, since the screen is the same
+    // visual rest. The impact sound stays a one-shot on top.
+    music.setMode("rest");
 
     // Captured BEFORE either write: the record this run was actually chasing.
     // The message is indexed on TIME (see La Percée), not on score.
@@ -1509,6 +1522,7 @@ export class FlightScene extends Phaser.Scene {
     // Dead: the world is frozen, only the replay screen's scenery animates.
     if (this.dead) {
       this.updateDeathScene(time, deltaMs / 1000);
+      music.update(deltaMs / 1000);
       return;
     }
     // Paused: everything is frozen, no death is possible.
@@ -1571,6 +1585,22 @@ export class FlightScene extends Phaser.Scene {
     this.refreshHud();
     this.refreshMagic();
     this.applyAmbiance();
+
+    // The music reads the same state the visuals do: the tier picks the
+    // tonality, the combo brings the rhythm in and opens the filter, the
+    // drained gauge cools it, the record approach hollows it, Full Moon adds
+    // the melody, the crossing silences everything. Real dt, not the slowed
+    // one: the clock must not slow with time.
+    music.update(realDt, {
+      combo: this.comboRatio,
+      comboCount: this.combo,
+      cold: 1 - Phaser.Math.Clamp(this.magic / MAGIC.max, 0, 1),
+      tension: this.perceeT,
+      crossing: this.perceeSlowMo,
+      fullMoon: this.fullMoon,
+      tierIndex: this.tierIndex
+    });
+
     if (DEBUG_HITBOX) this.drawDebug();
   }
 

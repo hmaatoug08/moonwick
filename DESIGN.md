@@ -407,3 +407,58 @@ the scene's moon is on the right — the mark reads the same constant the
 obstacle rims do, so moving the moon in config relights the logo with the
 whole forest. The canonical drawing is lit-right; the buffer mirrors as one
 piece, witch and all.
+
+### The music
+
+The game had synthesised one-shots (graze, spark, death) and total silence
+between them. The fix is deliberately NOT a composed loop, for two reasons
+that reinforce each other:
+
+**Repetition on short replayed sessions.** A run lasts 30–90 seconds and the
+whole game is built to make you replay it immediately. Any composed loop
+short enough to fit a session becomes recognisable within a handful of runs
+— and a player on their twentieth attempt of the evening would be hearing
+the same passage for the twentieth time, at exactly the moment frustration
+is highest. Generative layers dissolve that: rhythm and melody are drawn per
+bar from a scale and a per-run seed, so no two runs sound identical and
+there is no "passage" to recognise at all.
+
+**Coherence with the zero-file pillar.** Everything visual is generated at
+boot; shipping an .ogg would be the first asset file in the project. Layers
+of oscillators ARE the native musical form of that pillar — and they run on
+the effects' own AudioContext, never a second one, because two contexts is
+two audio threads for no benefit.
+
+**The music doubles the visual reading instead of competing with it.** Every
+input it listens to already has a visual voice, and the mapping is the same:
+
+| state          | eyes                        | ears                          |
+| -------------- | --------------------------- | ----------------------------- |
+| tier           | sky colour, tree species    | tonality (root note glides)   |
+| multiplier     | trail density, brightness   | rhythm density, filter opens  |
+| combo lost     | scenery cools, desaturates  | layers retreat, filter closes, the air rises |
+| Full Moon      | golden veil, blazing trail  | melody enters                 |
+| Percée approach| scenery desaturates         | the bed hollows out (duck)    |
+| crossing       | slow motion owns the screen | silence — the music steps aside |
+
+Nothing in the music carries NEW information — that would make it a HUD for
+the ears, something to parse. It says what the screen already says, in a
+register the player absorbs without attention. That is also why it sits
+clearly under the effects in volume: the swoosh and the chime are feedback
+about THIS graze; the music is weather.
+
+**Why layers fade instead of switching.** A layer that starts at combo 2 and
+stops at combo 0 would turn the combo timer into a metronome of punishments —
+a hard audio cut reads as an event, and losing the combo is already
+punished enough. Retreating by fade is the sonic equivalent of the scenery's
+desaturation: a mood draining, not a door slamming.
+
+**Mechanics.** One singleton, because the bed must carry across the
+menu -> run -> death loop without a seam inside the 300 ms replay rule.
+Standing oscillators start once and are mixed (starting nodes clicks; a
+60 fps loop must never allocate audio nodes per frame — the scheduled plucks
+are the only transients, a handful per second). Levels move through
+per-frame exponential smoothing: every toggle, pause, tier change or mode
+change is a ramp. The grid schedules one look-ahead beat, so a dropped frame
+never drops a note, and the whole engine is O(1) per frame — nothing shows
+up against the 60 fps budget at The Wall.

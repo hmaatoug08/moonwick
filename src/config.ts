@@ -812,6 +812,98 @@ export const SFX = {
 } as const;
 
 /**
+ * Adaptive music (src/music.ts) — entirely synthesised in Web Audio, on the
+ * SAME AudioContext as the effects (sfx.ts), never a second one. NO AUDIO
+ * FILE: the zero-asset pillar holds.
+ *
+ * NOT A COMPOSED LOOP: three layers that fade in and out (never a hard cut)
+ * and read the game state the way the visuals do —
+ *   - a permanent ambient PAD whose tonality follows the current tier;
+ *   - a RHYTHMIC layer that enters from combo 2, density following the
+ *     multiplier;
+ *   - a MELODIC layer at Full Moon.
+ * Losing the combo IMPOVERISHES the sound (layers retreat, filter closes) —
+ * the same logic as the scenery's visual cooling. The Percée approach
+ * hollows the whole bed; the slow-motion crossing silences it.
+ *
+ * Patterns are generated from a scale and a per-run seed: no fixed loop, two
+ * runs never sound identical. -> DESIGN.md, "The music".
+ */
+export const MUSIC = {
+  /** Clearly under the effects (SFX.masterVolume 0.12). */
+  masterVolume: 0.055,
+
+  /**
+   * Tonality per tier: the pad's root note, one per TIERS entry, gliding
+   * with the existing 2 s tier transition. Descending as the forest closes
+   * in — D3, C3, Bb2, G2 — then rising to E3 at The Moon's Eye, whose pale
+   * gold sky is the one bright place in the game.
+   */
+  tierRootHz: [146.83, 130.81, 116.54, 98.0, 164.81],
+  /** Minor-pentatonic degrees, in semitones over the tier root. */
+  scale: [0, 3, 5, 7, 10],
+
+  // PAD: root an octave down + fifth, doubled and detuned a few cents so the
+  // pair beats slowly. A lowpass opens with the combo and closes in the dark.
+  padDetuneCents: 5,
+  padGain: 0.5,
+  filterMinHz: 240,
+  filterMaxHz: 1200,
+  /** Combo loss closes the filter towards this fraction of its floor. */
+  coldFilterFactor: 0.6,
+  /** Breathing: a slow LFO swaying the filter, like the mist drifts. */
+  breatheHz: 0.07,
+  breatheDepthHz: 40,
+  /** Root glide time constant — matches TIER_FX.transitionS in feel. */
+  rootGlideS: 1.2,
+
+  // AIR: filtered procedural noise under the pad. It reads as candle-smoke /
+  // distant night wind, not as a foreground sound effect.
+  airGain: 0.32,
+  airHz: 520,
+  airQ: 0.65,
+  airRestPresence: 0.55,
+  airRunPresence: 0.35,
+  airColdLift: 0.35,
+  airTensionLift: 0.3,
+
+  // RHYTHM: soft low pulses on an eighth-note grid, from combo 2. The
+  // pattern is drawn from the run's seed per bar; density follows the
+  // multiplier between the two probabilities below.
+  bpm: 84,
+  stepsPerBar: 8,
+  rhythmEnterCombo: 2,
+  rhythmDensityMin: 0.25,
+  rhythmDensityMax: 0.7,
+  rhythmGain: 0.4,
+  rhythmDecayS: 0.16,
+  /** The pulse is the root two octaves up, softened. */
+  rhythmOctave: 2,
+
+  // MELODY, Full Moon only: seeded walk over the scale, two octaves up,
+  // sine plucks on the same grid at half density.
+  melodyGain: 0.3,
+  melodyDecayS: 0.7,
+  melodyOctave: 3,
+  melodyDensity: 0.45,
+
+  /** Percée approach: fraction of the bed removed at the marker. The
+   *  slow-motion crossing itself silences the music entirely. */
+  tensionDuck: 0.7,
+
+  // The rest variant (menu, death screen): pad alone, quieter, with a stray
+  // firefly chime every few seconds.
+  restLevel: 0.5,
+  chimeMinS: 5,
+  chimeMaxS: 11,
+  chimeGain: 0.1,
+  chimeDecayS: 1.2,
+
+  /** Smoothing time constant for every level move: ramps, never cuts. */
+  smoothS: 0.6
+} as const;
+
+/**
  * Tutorial-free onboarding, first run only: the first obstacle carries an
  * exaggerated halo and the graze word. Gone forever after the first
  * successful graze. No popup, nothing to skip.
