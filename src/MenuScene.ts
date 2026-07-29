@@ -10,8 +10,10 @@ import {
   NEAR_MISS,
   OBSTACLE_ART,
   SAFE_BOTTOM,
+  SCENERY,
   TIERS,
   TRAIL,
+  TYPE,
   WITCH,
   WORLD
 } from "./config";
@@ -20,8 +22,18 @@ import { MOON_ON_RIGHT } from "./obstacleShapes";
 import { Witch } from "./witchShape";
 import { getLanguage, LANG_NAMES, LANGS, Lang, onLanguageChange, setLanguage, t } from "./i18n";
 import { isSoundEnabled, loadDeaths, loadStats, setSoundEnabled, shouldEase } from "./save";
+import { addMoon, NightScenery } from "./scenery";
 import { ensureTextures, LIGHT_KEY, SPARK_KEY } from "./textures";
-import { buttonWidth, fitText } from "./ui";
+import {
+  actionBand,
+  capsText,
+  diamondDivider,
+  fitText,
+  hairline,
+  hairlineGradient,
+  serifText,
+  setCaps
+} from "./ui";
 
 /**
  * Home screen: logo, best score, "tap to play" (the whole screen), and a gear
@@ -46,18 +58,23 @@ export class MenuScene extends Phaser.Scene {
   private demoGrazing = false;
   /** 1 right after a graze, decaying to 0: drives the trail blaze. */
   private demoBlaze = 0;
+  private scenery!: NightScenery;
 
   private titleText!: Phaser.GameObjects.Text;
   private brandGlow!: Phaser.GameObjects.Image;
+  private bestLabel!: Phaser.GameObjects.Text;
   private bestText!: Phaser.GameObjects.Text;
   private playText!: Phaser.GameObjects.Text;
+  private tapText!: Phaser.GameObjects.Text;
+  /** Home-only furniture (arc, dividers): hidden with the rest of the home. */
+  private homeExtras: Array<{ setVisible(v: boolean): unknown }> = [];
 
   private settingsPanel!: Phaser.GameObjects.Container;
   private gearIcon!: Phaser.GameObjects.Graphics;
   private gearLabel!: Phaser.GameObjects.Text;
-  private scoresBg!: Phaser.GameObjects.Rectangle;
   private scoresIcon!: Phaser.GameObjects.Graphics;
   private scoresLabel!: Phaser.GameObjects.Text;
+  private scoresChevron!: Phaser.GameObjects.Text;
   private scoresZone!: Phaser.Geom.Rectangle;
   private settingsOpen = false;
   private gearZone!: Phaser.Geom.Rectangle;
@@ -81,6 +98,7 @@ export class MenuScene extends Phaser.Scene {
   private helpBackZone!: Phaser.Geom.Rectangle;
   private helpTitleText!: Phaser.GameObjects.Text;
   private helpBackText!: Phaser.GameObjects.Text;
+  private helpTitles: Phaser.GameObjects.Text[] = [];
   private helpCaptions: Phaser.GameObjects.Text[] = [];
   private howToText!: Phaser.GameObjects.Text;
 
@@ -89,10 +107,11 @@ export class MenuScene extends Phaser.Scene {
   private soundLabelText!: Phaser.GameObjects.Text;
   private soundValueText!: Phaser.GameObjects.Text;
   private backText!: Phaser.GameObjects.Text;
-  private langRows: { lang: Lang; bg: Phaser.GameObjects.Rectangle }[] = [];
-
-  /** Fixed widths, computed from the longest of the 4 translations. */
-  private widths: Record<string, number> = {};
+  private langRows: {
+    lang: Lang;
+    marker: Phaser.GameObjects.Graphics;
+    label: Phaser.GameObjects.Text;
+  }[] = [];
 
   constructor() {
     super("menu");
@@ -102,11 +121,13 @@ export class MenuScene extends Phaser.Scene {
     ensureTextures(this);
     const tier = TIERS[0];
 
-    // Scenery: same sky, same moon, same dust as the game.
+    // Scenery: same sky, same moon, same stars, treelines and mist as the game.
     const sky = this.add.graphics();
     sky.fillGradientStyle(tier.skyTop, tier.skyTop, tier.skyBottom, tier.skyBottom, 1);
     sky.fillRect(0, 0, WORLD.width, WORLD.height);
-    this.add.circle(WORLD.width - 70, 90, 34, 0xf5efd8, 0.9);
+    this.scenery = new NightScenery(this);
+    this.scenery.setMood(tier.skyTop, tier.skyBottom);
+    addMoon(this, 0xf5efd8);
 
     this.add
       .particles(0, 0, SPARK_KEY, {
@@ -198,6 +219,9 @@ export class MenuScene extends Phaser.Scene {
 
   private buildHome(): void {
     const cx = WORLD.width / 2;
+    // Phaser reuses the scene instance: a restart rebuilds every object, so
+    // the list must not keep references to the destroyed ones.
+    this.homeExtras = [];
 
     // Moon glow behind the logo: breathes very slowly, additive blend.
     this.brandGlow = this.add
@@ -216,81 +240,101 @@ export class MenuScene extends Phaser.Scene {
       ease: "Sine.easeInOut"
     });
 
-    // The title is a LOGO, not interface text: untranslated brand, large size,
-    // wide letter-spacing. It therefore never goes through i18n.
+    // The title is a LOGO, not interface text: untranslated brand, serif
+    // light, wide letter-spacing. It therefore never goes through i18n.
     this.titleText = this.add
-      .text(cx, 210, BRAND.name, {
-        fontFamily: "sans-serif",
-        fontStyle: "bold",
+      .text(cx, 226, BRAND.name, {
+        fontFamily: TYPE.serif,
+        fontStyle: "300",
         color: BRAND.color
       })
       .setOrigin(0.5)
       .setDepth(20);
     this.titleText.setLetterSpacing(BRAND.letterSpacing);
+    // The glyphs carry their own soft halo, so the word glows even when the
+    // breathing background glow is at its dimmest.
+    this.titleText.setShadow(0, 0, BRAND.shadowColor, BRAND.shadowBlur, false, true);
     fitText(this.titleText, WORLD.width - 40, BRAND.fontSizePx);
+
+    // Moon-arc under the word — the game's motif (the Percée arch), replacing
+    // any frame. Logo furniture, not interface: no text, no hit area.
+    const arc = this.add.graphics().setDepth(20);
+    arc.lineStyle(1, BRAND.arcColor, BRAND.arcAlpha);
+    arc.beginPath();
+    const arcCy = BRAND.arcY + BRAND.arcHeight / 2;
+    for (let i = 0; i <= 32; i++) {
+      const angle = (i / 32) * Math.PI;
+      const px = cx - Math.cos(angle) * (BRAND.arcWidth / 2);
+      const py = arcCy + Math.sin(angle) * (BRAND.arcHeight / 2);
+      if (i === 0) arc.moveTo(px, py);
+      else arc.lineTo(px, py);
+    }
+    arc.strokePath();
+    this.homeExtras.push(arc);
     // Long-press target. Padded well beyond the glyphs: this is a hidden
     // gesture, it should not demand precision.
     this.titleZone = new Phaser.Geom.Rectangle(0, 150, WORLD.width, 130);
 
+    // BEST · 1240 — caps label, serif gold value. Two texts because the two
+    // voices never share a font; centred as a pair in refreshTexts().
+    this.bestLabel = capsText(this, cx, 312, "", 11, TYPE.label, "700", 0.28)
+      .setOrigin(1, 0.5)
+      .setDepth(20);
     this.bestText = this.add
-      .text(cx, 278, "", { fontFamily: "sans-serif", color: "#d9a7ff" })
-      .setOrigin(0.5)
+      .text(cx, 312, "", { fontFamily: TYPE.serif, fontStyle: "500", fontSize: "19px", color: TYPE.gold })
+      .setOrigin(0, 0.5)
       .setDepth(20);
 
+    // A STILL line: the old "Tap to play" blinked at a player who was reading
+    // it. Serif italic states the verb; the caps hint below names the gesture.
+    const holdDivider = hairlineGradient(this, 28, 640, WORLD.width - 56, 0.35).setDepth(20);
+    this.homeExtras.push(holdDivider);
     this.playText = this.add
-      .text(cx, WORLD.height * 0.68, "", {
-        fontFamily: "sans-serif",
-        fontStyle: "bold",
-        color: "#f2c8ff"
+      .text(cx, 687, "", {
+        fontFamily: TYPE.serif,
+        fontStyle: "italic 400",
+        fontSize: "30px",
+        color: TYPE.cream
       })
       .setOrigin(0.5)
       .setDepth(20);
-    this.tweens.add({ targets: this.playText, alpha: 0.35, duration: 800, yoyo: true, repeat: -1 });
+    this.tapText = capsText(this, cx, 723, "", 11, "", "600", 0.28)
+      .setOrigin(0.5)
+      .setDepth(20)
+      .setColor(TYPE.violetDim);
 
     // Scores: the progression hub, reachable from here and from nowhere else.
-    // A labelled button rather than an icon alone — it is a place, not a toggle.
-    // The label is `t("scores")`; the scene and its key stay neutral, so the
-    // displayed name can change without touching code.
-    const scoresStyle = { fontFamily: "sans-serif", fontStyle: "bold", fontSize: "22px" };
-    const iconSpace = 44;
-    const scoresW =
-      buttonWidth(this, "scores", scoresStyle, 22, 180, WORLD.width - 80) + iconSpace;
-    const scoresY = WORLD.height - SAFE_BOTTOM - 74;
-    this.scoresBg = this.add
-      .rectangle(cx, scoresY, scoresW, 62, 0xffffff, 0.08)
-      .setStrokeStyle(2, 0x9b6bff, 0.7)
-      .setDepth(20);
+    // A hairline row, not a boxed button (rule 1): book icon, caps label, a
+    // serif chevron. The label is `t("scores")`; the key stays neutral.
+    const scoresY = 812;
+    const rowLine = hairline(this, 28, 772, WORLD.width - 56, 0.18).setDepth(20);
+    this.homeExtras.push(rowLine);
     this.scoresIcon = this.add.graphics().setDepth(21);
-    drawBookIcon(this.scoresIcon, cx - scoresW / 2 + 32, scoresY, 1.15);
-    this.scoresLabel = this.add
-      .text(cx + 14, scoresY, "", { ...scoresStyle, color: "#d9a7ff" })
-      .setOrigin(0.5)
+    drawBookIcon(this.scoresIcon, 43, scoresY, 1.05);
+    this.scoresLabel = capsText(this, 70, scoresY, "", 12, TYPE.labelBright, "600", 0.24)
+      .setOrigin(0, 0.5)
       .setDepth(20);
-    this.scoresZone = new Phaser.Geom.Rectangle(cx - scoresW / 2, scoresY - 31, scoresW, 62);
-
-    // Gear icon, top left (the moon occupies the right). Drawn as vectors:
-    // no asset, and nothing to translate.
-    const gear = this.add.graphics().setDepth(20);
-    const gx = 40;
-    const gy = 42;
-    gear.lineStyle(3, 0x8877aa, 1);
-    gear.strokeCircle(gx, gy, 11);
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      gear.beginPath();
-      gear.moveTo(gx + Math.cos(a) * 14, gy + Math.sin(a) * 14);
-      gear.lineTo(gx + Math.cos(a) * 20, gy + Math.sin(a) * 20);
-      gear.strokePath();
-    }
-    // The icon alone was ambiguous, so it now carries its label. The text goes
-    // through i18n like any interface string; only the drawn gear does not.
-    this.gearLabel = this.add
-      .text(gx + 30, gy, "", {
-        fontFamily: "sans-serif",
-        fontStyle: "bold",
-        fontSize: "18px",
-        color: "#8877aa"
+    this.scoresChevron = this.add
+      .text(WORLD.width - 28, scoresY, "›", {
+        fontFamily: TYPE.serif,
+        fontSize: "22px",
+        color: TYPE.violetDim
       })
+      .setOrigin(1, 0.5)
+      .setDepth(20);
+    this.scoresZone = new Phaser.Geom.Rectangle(16, scoresY - 28, WORLD.width - 32, 56);
+
+    // Settings, top left (the moon occupies the right): two concentric moon
+    // rings — no asset, nothing to translate in the drawing.
+    const gear = this.add.graphics().setDepth(20);
+    const gx = 41;
+    const gy = 49;
+    gear.lineStyle(1, TYPE.hairline, 0.75);
+    gear.strokeCircle(gx, gy, 13);
+    gear.strokeCircle(gx, gy, 5);
+    // The icon alone was ambiguous, so it now carries its label. The text goes
+    // through i18n like any interface string; only the drawing does not.
+    this.gearLabel = capsText(this, gx + 26, gy, "", 11, TYPE.label, "600", 0.24)
       .setOrigin(0, 0.5)
       .setDepth(20);
 
@@ -317,122 +361,104 @@ export class MenuScene extends Phaser.Scene {
   private setHomeVisible(on: boolean): void {
     this.titleText.setVisible(on);
     this.brandGlow.setVisible(on);
-    this.bestText.setVisible(on && loadStats().bestScore > 0);
+    const hasBest = loadStats().bestScore > 0;
+    this.bestLabel.setVisible(on && hasBest);
+    this.bestText.setVisible(on && hasBest);
     this.playText.setVisible(on);
+    this.tapText.setVisible(on);
     this.gearIcon.setVisible(on);
     this.gearLabel.setVisible(on);
-    this.scoresBg.setVisible(on);
+    this.scoresIcon.setVisible(on);
     this.scoresLabel.setVisible(on);
+    this.scoresChevron.setVisible(on);
+    for (const piece of this.homeExtras) piece.setVisible(on);
   }
 
   private buildSettings(): void {
     const cx = WORLD.width / 2;
     const veil = this.add
-      .rectangle(0, 0, WORLD.width, WORLD.height, 0x05030c, 0.9)
+      .rectangle(0, 0, WORLD.width, WORLD.height, 0x05030c, 0.96)
       .setOrigin(0, 0);
 
-    this.settingsTitleText = this.add
-      .text(cx, 150, "", { fontFamily: "sans-serif", fontStyle: "bold", color: "#f5efd8" })
-      .setOrigin(0.5);
-    this.langLabelText = this.add
-      .text(cx, 232, "", { fontFamily: "sans-serif", color: "#8877aa" })
-      .setOrigin(0.5);
+    // Serif title over a diamond divider — the shared header of every page.
+    this.settingsTitleText = serifText(this, cx, 135, "", 38, TYPE.cream).setOrigin(0.5);
+    const divider = diamondDivider(this, cx, 170, 88, TYPE.hairline, 0.7);
+    this.langLabelText = capsText(this, 28, 228, "", 11, TYPE.label, "700", 0.26).setOrigin(0, 0.5);
 
     const children: Phaser.GameObjects.GameObject[] = [
       veil,
       this.settingsTitleText,
+      divider,
       this.langLabelText
     ];
 
-    // Language selector: native names, one per row, sharing a width sized
-    // against the longest of the four.
-    const rowStyle = { fontFamily: "sans-serif", fontStyle: "bold", fontSize: "26px" };
-    const probe = this.make.text({ style: rowStyle }, false);
-    let rowWidth = 0;
-    for (const lang of LANGS) {
-      probe.setText(LANG_NAMES[lang]);
-      rowWidth = Math.max(rowWidth, probe.width);
-    }
-    probe.destroy();
-    rowWidth = Phaser.Math.Clamp(Math.ceil(rowWidth + 56), 220, WORLD.width - 48);
-    this.widths.langRow = rowWidth;
-
-    const rowH = 58;
-    const gap = 12;
-    const firstY = 296;
+    // Language selector: hairline rows, native serif names, and a gold
+    // diamond as the only mark of the current choice. No boxes (rule 1); the
+    // rows span the full margin width, so every target is 62 px tall and wide.
+    const rowH = 62;
+    const firstY = 256;
     this.langZones = [];
     this.langRows = [];
     LANGS.forEach((lang, index) => {
-      const y = firstY + index * (rowH + gap);
-      const bg = this.add
-        .rectangle(cx, y, rowWidth, rowH, 0xffffff, 0.06)
-        .setStrokeStyle(2, 0x9b6bff, 0.5);
-      const label = this.add
-        .text(cx, y, LANG_NAMES[lang], { ...rowStyle, color: "#d9a7ff" })
-        .setOrigin(0.5);
-      fitText(label, rowWidth - 32, 26);
+      const top = firstY + index * rowH;
+      const mid = top + rowH / 2;
+      const marker = this.add.graphics();
+      marker.fillStyle(TYPE.hairline, 1);
+      marker.save();
+      marker.translateCanvas(36, mid);
+      marker.rotateCanvas(Math.PI / 4);
+      marker.fillRect(-3, -3, 6, 6);
+      marker.restore();
+      const label = serifText(this, 58, mid, LANG_NAMES[lang], 28, "#9d96b4");
+      label.setOrigin(0, 0.5);
+      const line = hairline(this, 28, top + rowH, WORLD.width - 56);
       this.langZones.push({
         lang,
-        zone: new Phaser.Geom.Rectangle(cx - rowWidth / 2, y - rowH / 2, rowWidth, rowH)
+        zone: new Phaser.Geom.Rectangle(20, top, WORLD.width - 40, rowH)
       });
-      this.langRows.push({ lang, bg });
-      children.push(bg, label);
+      this.langRows.push({ lang, marker, label });
+      children.push(marker, label, line);
     });
 
-    // Sound toggle: label on the left, value on the right, one tappable row.
-    const soundY = firstY + LANGS.length * (rowH + gap) + 34;
-    const soundW = WORLD.width - 96;
-    const soundBg = this.add
-      .rectangle(cx, soundY, soundW, rowH, 0xffffff, 0.06)
-      .setStrokeStyle(2, 0x9b6bff, 0.5);
-    this.soundLabelText = this.add
-      .text(cx - soundW / 2 + 22, soundY, "", { fontFamily: "sans-serif", color: "#d9a7ff" })
-      .setOrigin(0, 0.5);
-    this.soundValueText = this.add
-      .text(cx + soundW / 2 - 22, soundY, "", {
-        fontFamily: "sans-serif",
-        fontStyle: "bold",
-        color: "#f2c8ff"
-      })
-      .setOrigin(1, 0.5);
-    this.soundZone = new Phaser.Geom.Rectangle(cx - soundW / 2, soundY - rowH / 2, soundW, rowH);
-    children.push(soundBg, this.soundLabelText, this.soundValueText);
+    // Sound toggle: caps label on the left, serif value on the right.
+    const soundTop = 552;
+    this.soundLabelText = capsText(this, 28, soundTop + rowH / 2, "", 11, TYPE.label, "700", 0.26).setOrigin(
+      0,
+      0.5
+    );
+    this.soundValueText = serifText(this, WORLD.width - 28, soundTop + rowH / 2, "", 26, TYPE.cream).setOrigin(
+      1,
+      0.5
+    );
+    const soundLine = hairline(this, 28, soundTop + rowH, WORLD.width - 56);
+    this.soundZone = new Phaser.Geom.Rectangle(20, soundTop, WORLD.width - 40, rowH);
+    children.push(this.soundLabelText, this.soundValueText, soundLine);
 
     // "How to play": opens the help page. Nothing shows it automatically.
-    // Sits between the sound row and the Back button, touching neither: their
-    // hit zones must not overlap, since this one is tested first.
-    const howToStyle = { fontFamily: "sans-serif", fontStyle: "bold", fontSize: "24px" };
-    const howToH = 52;
-    const howToY = 670;
-    const howToW = buttonWidth(this, "settings.howToPlay", howToStyle, 34, 220, WORLD.width - 64);
-    this.widths.howTo = howToW;
-    const howToBg = this.add
-      .rectangle(cx, howToY, howToW, howToH, 0xffffff, 0.06)
-      .setStrokeStyle(2, 0x9b6bff, 0.5);
-    this.howToText = this.add
-      .text(cx, howToY, "", { ...howToStyle, color: "#d9a7ff" })
-      .setOrigin(0.5);
-    this.howToZone = new Phaser.Geom.Rectangle(
-      cx - howToW / 2,
-      howToY - howToH / 2,
-      howToW,
-      howToH
+    const howToTop = 614;
+    this.howToText = capsText(this, 28, howToTop + rowH / 2, "", 11, TYPE.label, "700", 0.26).setOrigin(
+      0,
+      0.5
     );
-    children.push(howToBg, this.howToText);
+    const howToChevron = this.add
+      .text(WORLD.width - 28, howToTop + rowH / 2, "›", {
+        fontFamily: TYPE.serif,
+        fontSize: "22px",
+        color: TYPE.violetDim
+      })
+      .setOrigin(1, 0.5);
+    const howToLine = hairline(this, 28, howToTop + rowH, WORLD.width - 56);
+    this.howToZone = new Phaser.Geom.Rectangle(20, howToTop, WORLD.width - 40, rowH);
+    children.push(this.howToText, howToChevron, howToLine);
 
-    // Back: wide button at the bottom, within thumb reach.
-    const backStyle = { fontFamily: "sans-serif", fontStyle: "bold", fontSize: "30px" };
-    const backW = buttonWidth(this, "settings.back", backStyle, 44, 200, WORLD.width - 64);
-    this.widths.back = backW;
-    const backY = WORLD.height - 110;
-    const backBg = this.add
-      .rectangle(cx, backY, backW, 74, 0x9b6bff, 0.16)
-      .setStrokeStyle(2, 0x9b6bff, 0.6);
-    this.backText = this.add
-      .text(cx, backY, "", { ...backStyle, color: "#f2c8ff" })
-      .setOrigin(0.5);
-    this.backZone = new Phaser.Geom.Rectangle(cx - backW / 2, backY - 37, backW, 74);
-    children.push(backBg, this.backText);
+    // Back: THE one filled band of this screen, full width, above the safe
+    // area. A band is a place to tap, not a box to read.
+    const bandTop = 756;
+    const bandH = WORLD.height - SAFE_BOTTOM - bandTop;
+    const backBand = actionBand(this, bandTop, bandH);
+    this.backText = capsText(this, cx, bandTop + bandH / 2, "", 12, TYPE.cream, "600", 0.4).setOrigin(0.5);
+    this.backZone = new Phaser.Geom.Rectangle(0, bandTop, WORLD.width, bandH);
+    children.push(backBand, this.backText);
 
     this.settingsPanel = this.add.container(0, 0, children).setDepth(30).setVisible(false);
   }
@@ -446,47 +472,59 @@ export class MenuScene extends Phaser.Scene {
   private buildHelp(): void {
     const cx = WORLD.width / 2;
     const veil = this.add
-      .rectangle(0, 0, WORLD.width, WORLD.height, 0x05030c, 0.94)
+      .rectangle(0, 0, WORLD.width, WORLD.height, 0x05030c, 0.96)
       .setOrigin(0, 0);
 
-    this.helpTitleText = this.add
-      .text(cx, 140, "", { fontFamily: "sans-serif", fontStyle: "bold", color: "#f5efd8" })
-      .setOrigin(0.5);
+    this.helpTitleText = serifText(this, cx, 135, "", 38, TYPE.cream).setOrigin(0.5);
+    const divider = diamondDivider(this, cx, 170, 88, TYPE.hairline, 0.7);
 
-    const children: Phaser.GameObjects.GameObject[] = [veil, this.helpTitleText];
+    const children: Phaser.GameObjects.GameObject[] = [veil, this.helpTitleText, divider];
 
-    const iconX = 96;
-    const textX = 156;
-    const rowsY = [268, 418, 568];
+    // Three rows: the pictogram left, a coloured caps title over a serif
+    // sentence right, a hairline between rows. Same pictograms as before —
+    // they use the game's own vocabulary and must keep matching it.
+    const iconX = 76;
+    const textX = 160;
+    const rowsY = [290, 480, 670];
     const art = this.add.graphics();
     children.push(art);
 
+    const titleColors = [TYPE.gold, "#ff6b6b", "#a08fd0"];
+    this.helpTitles = rowsY.map((y, index) => {
+      const title = capsText(this, textX, y - 26, "", 11, titleColors[index], "700", 0.26).setOrigin(
+        0,
+        0.5
+      );
+      children.push(title);
+      return title;
+    });
     this.helpCaptions = rowsY.map((y) => {
       const caption = this.add
-        .text(textX, y, "", {
-          fontFamily: "sans-serif",
-          fontSize: "20px",
-          color: "#d9a7ff",
+        .text(textX, y + 12, "", {
+          fontFamily: TYPE.serif,
+          fontSize: "26px",
+          color: TYPE.cream,
           wordWrap: { width: WORLD.width - textX - 32 }
         })
         .setOrigin(0, 0.5);
       children.push(caption);
       return caption;
     });
+    rowsY.slice(0, -1).forEach((y) => {
+      children.push(hairline(this, 28, y + 88, WORLD.width - 56));
+    });
 
     this.drawHelpArt(art, iconX, rowsY);
 
-    // Back button, same shape and place as in the settings.
-    const backStyle = { fontFamily: "sans-serif", fontStyle: "bold", fontSize: "30px" };
-    const backW = buttonWidth(this, "settings.back", backStyle, 44, 200, WORLD.width - 64);
-    this.widths.helpBack = backW;
-    const backY = WORLD.height - 110;
-    const backBg = this.add
-      .rectangle(cx, backY, backW, 74, 0x9b6bff, 0.16)
-      .setStrokeStyle(2, 0x9b6bff, 0.6);
-    this.helpBackText = this.add.text(cx, backY, "", { ...backStyle, color: "#f2c8ff" }).setOrigin(0.5);
-    this.helpBackZone = new Phaser.Geom.Rectangle(cx - backW / 2, backY - 37, backW, 74);
-    children.push(backBg, this.helpBackText);
+    // Back: the screen's one filled band, same geometry as in the settings.
+    const bandTop = 756;
+    const bandH = WORLD.height - SAFE_BOTTOM - bandTop;
+    const backBand = actionBand(this, bandTop, bandH);
+    this.helpBackText = capsText(this, cx, bandTop + bandH / 2, "", 12, TYPE.cream, "600", 0.4).setOrigin(
+      0.5
+    );
+    this.helpBackZone = new Phaser.Geom.Rectangle(0, bandTop, WORLD.width, bandH);
+    children.push(backBand, this.helpBackText);
 
     this.helpPanel = this.add.container(0, 0, children).setDepth(31).setVisible(false);
   }
@@ -557,47 +595,60 @@ export class MenuScene extends Phaser.Scene {
     // — it never changes with the language.
 
     // No guilt-inducing "0": the best score only appears once it exists.
-    this.bestText.setVisible(stats.bestScore > 0);
-    if (stats.bestScore > 0) {
-      this.bestText.setText(t("menu.bestScore", { score: stats.bestScore }));
-      fitText(this.bestText, WORLD.width - 48, 24);
+    // Caps label + serif gold value, centred as a pair around the middle.
+    const hasBest = stats.bestScore > 0;
+    this.bestLabel.setVisible(hasBest && !this.settingsOpen && !this.helpOpen && !this.statsOpen);
+    this.bestText.setVisible(this.bestLabel.visible);
+    if (hasBest) {
+      setCaps(this.bestLabel, t("menu.best"));
+      this.bestText.setText(String(stats.bestScore));
+      const pairWidth = this.bestLabel.width + 10 + this.bestText.width;
+      this.bestLabel.setX(WORLD.width / 2 - pairWidth / 2 + this.bestLabel.width);
+      this.bestText.setX(this.bestLabel.x + 10);
     }
 
-    this.scoresLabel.setText(t("scores"));
-    fitText(this.scoresLabel, this.scoresZone.width - 24, 22);
+    setCaps(this.scoresLabel, t("scores"));
+    fitText(this.scoresLabel, WORLD.width - 140, 12);
 
-    this.playText.setText(t("menu.play"));
+    this.playText.setText(t("menu.hold"));
     fitText(this.playText, WORLD.width - 48, 30);
+    setCaps(this.tapText, t("menu.tap"));
+    fitText(this.tapText, WORLD.width - 48, 11);
 
-    this.gearLabel.setText(t("settings.title"));
-    fitText(this.gearLabel, WORLD.width - this.gearLabel.x - 16, 18);
+    setCaps(this.gearLabel, t("settings.title"));
+    fitText(this.gearLabel, WORLD.width - this.gearLabel.x - 96, 11);
     this.refreshGearZone();
 
     this.settingsTitleText.setText(t("settings.title"));
-    fitText(this.settingsTitleText, WORLD.width - 48, 44);
-    this.langLabelText.setText(t("settings.language"));
-    fitText(this.langLabelText, WORLD.width - 48, 22);
+    fitText(this.settingsTitleText, WORLD.width - 48, 38);
+    setCaps(this.langLabelText, t("settings.language"));
+    fitText(this.langLabelText, WORLD.width - 56, 11);
 
-    this.soundLabelText.setText(t("settings.sound"));
-    fitText(this.soundLabelText, this.widths.langRow * 0.5, 26);
+    setCaps(this.soundLabelText, t("settings.sound"));
+    fitText(this.soundLabelText, 220, 11);
     this.refreshSoundValue();
 
-    this.backText.setText(t("settings.back"));
-    fitText(this.backText, this.widths.back - 36, 30);
+    setCaps(this.backText, t("settings.back"));
+    fitText(this.backText, WORLD.width - 64, 12);
 
-    this.howToText.setText(t("settings.howToPlay"));
-    fitText(this.howToText, this.widths.howTo - 28, 24);
+    setCaps(this.howToText, t("settings.howToPlay"));
+    fitText(this.howToText, 300, 11);
 
     this.helpTitleText.setText(t("settings.howToPlay"));
-    fitText(this.helpTitleText, WORLD.width - 48, 40);
-    this.helpBackText.setText(t("settings.back"));
-    fitText(this.helpBackText, this.widths.helpBack - 36, 30);
+    fitText(this.helpTitleText, WORLD.width - 48, 38);
+    setCaps(this.helpBackText, t("settings.back"));
+    fitText(this.helpBackText, WORLD.width - 64, 12);
 
+    const helpTitleKeys = ["help.grazeTitle", "help.touchTitle", "help.comboTitle"] as const;
+    helpTitleKeys.forEach((key, index) => {
+      setCaps(this.helpTitles[index], t(key));
+      fitText(this.helpTitles[index], WORLD.width - 160 - 32, 11);
+    });
     const helpKeys = ["help.graze", "help.touch", "help.combo"] as const;
     helpKeys.forEach((key, index) => {
       const caption = this.helpCaptions[index];
       // Wrapped rather than shrunk: these are full sentences, not labels.
-      caption.setFontSize(20).setText(t(key));
+      caption.setFontSize(26).setText(t(key));
     });
 
     this.refreshLangSelection();
@@ -608,13 +659,23 @@ export class MenuScene extends Phaser.Scene {
     fitText(this.soundValueText, 120, 26);
   }
 
-  /** The active language row is highlighted. */
+  /** Gold diamond and cream name on the active row; the rest stays muted. */
   private refreshLangSelection(): void {
     const active = getLanguage();
     for (const row of this.langRows) {
       const on = row.lang === active;
-      row.bg.setFillStyle(0x9b6bff, on ? 0.28 : 0.06);
-      row.bg.setStrokeStyle(2, 0x9b6bff, on ? 1 : 0.5);
+      row.marker.setVisible(on);
+      row.marker.setAlpha(1);
+      if (on) {
+        row.marker.clear();
+        row.marker.fillStyle(0xffd9a0, 1);
+        row.marker.save();
+        row.marker.translateCanvas(36, row.label.y);
+        row.marker.rotateCanvas(Math.PI / 4);
+        row.marker.fillRect(-3, -3, 6, 6);
+        row.marker.restore();
+      }
+      row.label.setColor(on ? TYPE.cream : "#9d96b4");
     }
   }
 
@@ -786,6 +847,8 @@ export class MenuScene extends Phaser.Scene {
     // Demo flight: gentle Lissajous curve, looping forever.
     const t2 = time / 1000;
     const dt = deltaMs / 1000;
+    // The forest breathes behind her, far below any tier speed: a rest.
+    this.scenery.update(dt, SCENERY.menuDriftPxS);
     const y = WORLD.height * 0.47 + Math.sin(t2 * 1.7) * 70;
     // Her own vertical speed drives the tilt, so she banks through the loop.
     const vy = (y - this.demoWitch.y) / Math.max(dt, 1 / 240);

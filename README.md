@@ -3,7 +3,7 @@
 A mobile *near-miss* game: a witch on a broomstick flies through a cursed forest at night.
 **Grazing obstacles charges her magic** — the trail lights up, the multiplier climbs, all the way to Full Moon (x5). Touching an obstacle kills. You are back in under a second.
 
-Portrait, one hand, 30 to 90 second sessions. No external assets: scenery, particles and sounds are all generated at runtime.
+Portrait, one hand, 30 to 90 second sessions. No external assets: scenery, particles and sounds are all generated at runtime — the two UI webfonts (Cormorant Garamond, Manrope) are the single exception, awaited before boot.
 
 ---
 
@@ -56,6 +56,7 @@ src/
   save.ts          localStorage: scores, settings, prefix migration
   share.ts         1080x1920 score image (off-screen canvas) + sharing
   sfx.ts           Web Audio synthesised sounds, no files
+  scenery.ts       Night background: stars, textured moon, parallax treelines, mist
   textures.ts      Runtime-generated textures (glow, spark)
 ```
 

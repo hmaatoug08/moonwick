@@ -1,4 +1,4 @@
-import { BRAND } from "./config";
+import { BRAND, TYPE } from "./config";
 import { t } from "./i18n";
 
 /**
@@ -26,10 +26,11 @@ function fitFont(
   text: string,
   basePx: number,
   maxWidth: number,
-  weight = ""
+  weight = "",
+  family: string = TYPE.serif
 ): void {
   let px = basePx;
-  const font = (size: number) => `${weight} ${size}px sans-serif`.trim();
+  const font = (size: number) => `${weight} ${size}px ${family}`.trim();
   ctx.font = font(px);
   while (ctx.measureText(text).width > maxWidth && px > 16) {
     px -= 2;
@@ -97,32 +98,37 @@ function drawCard(data: ShareData): HTMLCanvasElement {
   ctx.textAlign = "center";
   const maxTextWidth = W - 120;
 
-  // Record mention, above the score.
+  // Record mention, above the score: caps recipe, gold — the record colour.
   if (data.isRecord) {
-    ctx.fillStyle = "#ffd27a";
-    fitFont(ctx, t("share.newRecord"), 62, maxTextWidth, "bold");
-    ctx.fillText(t("share.newRecord"), W / 2, 500);
+    ctx.fillStyle = TYPE.gold;
+    const record = t("share.newRecord").toUpperCase();
+    fitFont(ctx, record, 48, maxTextWidth, "700", TYPE.sans);
+    ctx.letterSpacing = "12px";
+    ctx.fillText(record, W / 2, 500);
+    ctx.letterSpacing = "0px";
   }
 
-  // The score, huge: it is the subject of the image.
-  ctx.fillStyle = "#f5efd8";
-  fitFont(ctx, String(data.score), 400, maxTextWidth, "bold");
+  // The score, huge, serif light: it is the subject of the image.
+  ctx.fillStyle = TYPE.cream;
+  fitFont(ctx, String(data.score), 420, maxTextWidth, "300");
   ctx.fillText(String(data.score), W / 2, 900);
 
-  // Tier reached and best combo.
-  ctx.fillStyle = "#d9a7ff";
-  fitFont(ctx, data.tierName, 56, maxTextWidth);
+  // Tier reached (serif italic — a place name) and best combo.
+  ctx.fillStyle = "#d7cfe8";
+  fitFont(ctx, data.tierName, 64, maxTextWidth, "italic 400");
   ctx.fillText(data.tierName, W / 2, 1030);
-  ctx.fillStyle = "#c9a0ff";
-  const combo = t("share.bestCombo", { combo: data.bestCombo });
-  fitFont(ctx, combo, 44, maxTextWidth);
+  ctx.fillStyle = TYPE.label;
+  const combo = t("share.bestCombo", { combo: data.bestCombo }).toUpperCase();
+  fitFont(ctx, combo, 30, maxTextWidth, "600", TYPE.sans);
+  ctx.letterSpacing = "8px";
   ctx.fillText(combo, W / 2, 1110);
+  ctx.letterSpacing = "0px";
 
   // Brand, discreet, at the bottom. Never translated (same treatment as the
-  // home screen logo: wide letter-spacing, never routed through i18n).
-  ctx.fillStyle = "rgba(217,167,255,0.55)";
-  fitFont(ctx, BRAND.name, 42, maxTextWidth);
-  ctx.letterSpacing = `${Math.round(BRAND.letterSpacing * 0.6)}px`;
+  // home screen logo: serif light, wide letter-spacing, outside i18n).
+  ctx.fillStyle = "rgba(244,238,224,0.55)";
+  fitFont(ctx, BRAND.name, 52, maxTextWidth, "300");
+  ctx.letterSpacing = `${Math.round(BRAND.letterSpacing * 0.9)}px`;
   ctx.fillText(BRAND.name, W / 2, H - 110);
   ctx.letterSpacing = "0px";
 

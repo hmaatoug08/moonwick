@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { FIREFLIES, NEAR_MISS, SCORING, VALUE_TAG } from "./config";
+import { FIREFLIES, NEAR_MISS, SCORING, TYPE, VALUE_TAG } from "./config";
 import type { Obstacle } from "./obstacles";
 import { SPARK_KEY } from "./textures";
 
@@ -85,8 +85,9 @@ export class RewardCues {
       this.tags.push({
         text: scene.add
           .text(0, 0, "", {
-            fontFamily: "sans-serif",
-            fontStyle: "bold",
+            // Serif, like the floating gains: the tag is a value, not a label.
+            fontFamily: TYPE.serif,
+            fontStyle: "500",
             fontSize: `${VALUE_TAG.fontSizePx}px`,
             color: VALUE_TAG.color
           })
