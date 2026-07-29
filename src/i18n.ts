@@ -38,11 +38,42 @@ const EN = {
 
   "death.causeBranch": "You hit a branch",
   "death.causeTrunk": "You hit a trunk",
+  // La Percée. Whole sentences, never assembled from fragments: word order and
+  // agreement differ per language (see the anti-concatenation rule).
+  percee: "BREAKTHROUGH",
   "death.tier": "Tier · {tier}",
   "death.bestCombo": "Best combo · {combo}",
   "death.share": "Share",
   "death.home": "Home",
   "death.replay": "Replay",
+
+  // The progression hub. The DISPLAYED name is this key alone, so it can be
+  // renamed without touching a line of code — the scene is `ScoresScene` and
+  // its key is "scores", both deliberately neutral.
+  scores: "Scores",
+  "scores.records": "Records",
+  "scores.journal": "Journal",
+  "scores.forest": "The forest",
+  "scores.best": "Best score",
+  "scores.bestCombo": "Best combo",
+  "scores.bestTime": "Longest flight",
+  "scores.recent": "Recent runs",
+  "scores.games": "Runs flown",
+  "scores.playTime": "Time in the forest",
+  "scores.grazes": "Grazes",
+  "scores.fullMoons": "Full Moons",
+  "scores.closestGraze": "Closest graze",
+  "scores.byTier": "By tier",
+  "scores.byEssence": "By species",
+  "scores.reached": "reached",
+  "scores.cleared": "cleared",
+  "scores.empty": "Fly once and this page fills itself.",
+  "scores.seconds": "{value} s",
+  "scores.pixels": "{value} px",
+  "essence.birch": "Birches",
+  "essence.gnarled": "Gnarled trunks",
+  "essence.bramble": "Brambles",
+  "essence.denseStand": "Dense stand",
 
   "pause.title": "Paused",
   "pause.hint": "Tap to resume",
@@ -84,11 +115,37 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
 
     "death.causeBranch": "Tu as touché une branche",
     "death.causeTrunk": "Tu as touché un tronc",
+    percee: "LA PERCÉE",
     "death.tier": "Palier · {tier}",
     "death.bestCombo": "Meilleur combo · {combo}",
     "death.share": "Partager",
     "death.home": "Accueil",
     "death.replay": "Rejouer",
+
+    scores: "Scores",
+    "scores.records": "Records",
+    "scores.journal": "Journal",
+    "scores.forest": "La forêt",
+    "scores.best": "Meilleur score",
+    "scores.bestCombo": "Meilleur combo",
+    "scores.bestTime": "Plus long vol",
+    "scores.recent": "Dernières parties",
+    "scores.games": "Vols effectués",
+    "scores.playTime": "Temps dans la forêt",
+    "scores.grazes": "Frôlements",
+    "scores.fullMoons": "Pleines Lunes",
+    "scores.closestGraze": "Frôlement le plus court",
+    "scores.byTier": "Par palier",
+    "scores.byEssence": "Par essence",
+    "scores.reached": "atteint",
+    "scores.cleared": "traversé",
+    "scores.empty": "Vole une fois et cette page se remplira.",
+    "scores.seconds": "{value} s",
+    "scores.pixels": "{value} px",
+    "essence.birch": "Bouleaux",
+    "essence.gnarled": "Troncs noueux",
+    "essence.bramble": "Ronces",
+    "essence.denseStand": "Futaie dense",
 
     "pause.title": "En pause",
     "pause.hint": "Tape pour reprendre",
@@ -123,11 +180,37 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
 
     "death.causeBranch": "Has tocado una rama",
     "death.causeTrunk": "Has tocado un tronco",
+    percee: "LA BRECHA",
     "death.tier": "Nivel · {tier}",
     "death.bestCombo": "Mejor combo · {combo}",
     "death.share": "Compartir",
     "death.home": "Inicio",
     "death.replay": "Jugar de nuevo",
+
+    scores: "Puntuaciones",
+    "scores.records": "Récords",
+    "scores.journal": "Diario",
+    "scores.forest": "El bosque",
+    "scores.best": "Mejor puntuación",
+    "scores.bestCombo": "Mejor combo",
+    "scores.bestTime": "Vuelo más largo",
+    "scores.recent": "Últimas partidas",
+    "scores.games": "Vuelos realizados",
+    "scores.playTime": "Tiempo en el bosque",
+    "scores.grazes": "Roces",
+    "scores.fullMoons": "Lunas Llenas",
+    "scores.closestGraze": "Roce más ajustado",
+    "scores.byTier": "Por nivel",
+    "scores.byEssence": "Por especie",
+    "scores.reached": "alcanzado",
+    "scores.cleared": "superado",
+    "scores.empty": "Vuela una vez y esta página se llenará.",
+    "scores.seconds": "{value} s",
+    "scores.pixels": "{value} px",
+    "essence.birch": "Abedules",
+    "essence.gnarled": "Troncos nudosos",
+    "essence.bramble": "Zarzas",
+    "essence.denseStand": "Bosque denso",
 
     "pause.title": "En pausa",
     "pause.hint": "Toca para continuar",
@@ -162,11 +245,37 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
 
     "death.causeBranch": "Hai toccato un ramo",
     "death.causeTrunk": "Hai toccato un tronco",
+    percee: "IL VARCO",
     "death.tier": "Livello · {tier}",
     "death.bestCombo": "Miglior combo · {combo}",
     "death.share": "Condividi",
     "death.home": "Home",
     "death.replay": "Rigioca",
+
+    scores: "Punteggi",
+    "scores.records": "Record",
+    "scores.journal": "Diario",
+    "scores.forest": "La foresta",
+    "scores.best": "Punteggio migliore",
+    "scores.bestCombo": "Combo migliore",
+    "scores.bestTime": "Volo più lungo",
+    "scores.recent": "Ultime partite",
+    "scores.games": "Voli effettuati",
+    "scores.playTime": "Tempo nella foresta",
+    "scores.grazes": "Sfioramenti",
+    "scores.fullMoons": "Lune Piene",
+    "scores.closestGraze": "Sfioramento più stretto",
+    "scores.byTier": "Per livello",
+    "scores.byEssence": "Per specie",
+    "scores.reached": "raggiunto",
+    "scores.cleared": "superato",
+    "scores.empty": "Vola una volta e questa pagina si riempirà.",
+    "scores.seconds": "{value} s",
+    "scores.pixels": "{value} px",
+    "essence.birch": "Betulle",
+    "essence.gnarled": "Tronchi nodosi",
+    "essence.bramble": "Rovi",
+    "essence.denseStand": "Bosco fitto",
 
     "pause.title": "In pausa",
     "pause.hint": "Tocca per riprendere",
@@ -185,13 +294,21 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
 };
 
 /**
- * Contextual game-over messages, shown as one line above the score.
+ * The death screen's ONE line. It is the only prose on that screen, so it does
+ * two jobs at once: it says what happened (the gap to the record, the combo,
+ * the tier) AND it gives the player a reason to go again.
+ *
+ * TONE: short, warm, never mocking. Someone who has just missed their record
+ * by a second must not feel teased about it. Two short lines at most.
  *
  * ANTI-CONCATENATION RULE: a message is NEVER assembled from fragments. Each
  * variant is a complete sentence written out in full in every language, with
- * `{score}`, `{combo}` and `{tier}` placeholders. Word order, punctuation and
- * agreement differ per language, so glueing pieces together produces broken
- * sentences somewhere — always add a whole new template instead.
+ * `{seconds}`, `{combo}` and `{tier}` placeholders. Word order,
+ * punctuation and agreement differ per language, so glueing pieces together
+ * produces broken sentences somewhere — always add a whole new template.
+ *
+ * `{seconds}` appears ONLY in `nearRecord`, which is the one category that
+ * cannot be picked without a record to measure against.
  *
  * Each category holds 2-3 variants, picked at random by `deathMessage()`.
  */
@@ -200,115 +317,115 @@ export type DeathCategory = "newRecord" | "nearRecord" | "bigCombo" | "earlyDeat
 export const DEATH_MESSAGES: Record<Lang, Record<DeathCategory, string[]>> = {
   en: {
     newRecord: [
-      "New record — {score} points.",
-      "Your best run yet: {score}.",
-      "{score}. Nothing you have flown comes close."
+      "New record. You have never flown this far.",
+      "A new best. {tier} did not stop you.",
+      "Record broken. That line was yours."
     ],
     nearRecord: [
-      "So close. {score}, and the record still stands.",
-      "{score} — your record is within reach.",
-      "You were closing in: {score}."
+      "{seconds} s short of your record. You were almost there.",
+      "Your best was {seconds} s away. So close.",
+      "Only {seconds} s left to go. The next one is yours."
     ],
     bigCombo: [
-      "A chain of {combo} grazes. The forest noticed.",
-      "{combo} grazes without breaking. That was the good stuff.",
-      "Combo {combo} — you were flying on magic alone."
+      "A combo of {combo}. Your magic held a long time.",
+      "{combo} grazes without breaking. That was fine flying.",
+      "Combo of {combo}. The trail barely dimmed."
     ],
     earlyDeath: [
-      "That was quick. The night had barely started.",
-      "Barely airborne. Again?",
-      "The very first branches got you."
+      "{tier} is still waiting for you.",
+      "A short flight. {tier} will still be there.",
+      "The night had barely started. {tier} again?"
     ],
     default: [
-      "{score} points. The forest keeps its trophies.",
-      "You reached {tier} with {score}.",
-      "{score}. The branches win this round."
+      "{tier} behind you. The forest goes on.",
+      "You held your line through {tier}. Again?",
+      "A good stretch of forest. The trees keep coming."
     ]
   },
 
   fr: {
     newRecord: [
-      "Nouveau record — {score} points.",
-      "Ta meilleure course : {score}.",
-      "{score}. Rien de ce que tu as volé n'en approche."
+      "Nouveau record. Tu n'as jamais volé aussi loin.",
+      "Nouveau meilleur vol. {tier} ne t'a pas arrêtée.",
+      "Record battu. Cette ligne était la tienne."
     ],
     nearRecord: [
-      "Tout près. {score}, et le record tient encore.",
-      "{score} — ton record est à portée.",
-      "Tu te rapprochais : {score}."
+      "Il te restait {seconds} s. Tu y étais presque.",
+      "Ton record était à {seconds} s. Si près.",
+      "Plus que {seconds} s. La prochaine est la bonne."
     ],
     bigCombo: [
-      "Une chaîne de {combo} frôlements. La forêt l'a remarqué.",
+      "Combo de {combo} — ta magie a tenu longtemps.",
       "{combo} frôlements sans rompre. C'était du beau vol.",
-      "Combo {combo} — tu ne volais plus qu'à la magie."
+      "Combo de {combo}. La traînée n'a presque pas faibli."
     ],
     earlyDeath: [
-      "Vite terminé. La nuit venait à peine de commencer.",
-      "À peine en l'air. On recommence ?",
-      "Les toutes premières branches ont eu raison de toi."
+      "{tier} t'attend encore.",
+      "Vol court. {tier} sera toujours là.",
+      "La nuit commençait à peine. On retente {tier} ?"
     ],
     default: [
-      "{score} points. La forêt garde ses trophées.",
-      "Tu as atteint {tier} avec {score}.",
-      "{score}. Les branches gagnent cette manche."
+      "{tier} derrière toi. La forêt continue.",
+      "Tu as tenu ta ligne jusqu'à {tier}. On y retourne ?",
+      "Belle portion de forêt. Les arbres défilent encore."
     ]
   },
 
   // TODO: écrire en natif — texte anglais en attendant.
   es: {
     newRecord: [
-      "New record — {score} points.",
-      "Your best run yet: {score}.",
-      "{score}. Nothing you have flown comes close."
+      "New record. You have never flown this far.",
+      "A new best. {tier} did not stop you.",
+      "Record broken. That line was yours."
     ],
     nearRecord: [
-      "So close. {score}, and the record still stands.",
-      "{score} — your record is within reach.",
-      "You were closing in: {score}."
+      "{seconds} s short of your record. You were almost there.",
+      "Your best was {seconds} s away. So close.",
+      "Only {seconds} s left to go. The next one is yours."
     ],
     bigCombo: [
-      "A chain of {combo} grazes. The forest noticed.",
-      "{combo} grazes without breaking. That was the good stuff.",
-      "Combo {combo} — you were flying on magic alone."
+      "A combo of {combo}. Your magic held a long time.",
+      "{combo} grazes without breaking. That was fine flying.",
+      "Combo of {combo}. The trail barely dimmed."
     ],
     earlyDeath: [
-      "That was quick. The night had barely started.",
-      "Barely airborne. Again?",
-      "The very first branches got you."
+      "{tier} is still waiting for you.",
+      "A short flight. {tier} will still be there.",
+      "The night had barely started. {tier} again?"
     ],
     default: [
-      "{score} points. The forest keeps its trophies.",
-      "You reached {tier} with {score}.",
-      "{score}. The branches win this round."
+      "{tier} behind you. The forest goes on.",
+      "You held your line through {tier}. Again?",
+      "A good stretch of forest. The trees keep coming."
     ]
   },
 
   // TODO: écrire en natif — texte anglais en attendant.
   it: {
     newRecord: [
-      "New record — {score} points.",
-      "Your best run yet: {score}.",
-      "{score}. Nothing you have flown comes close."
+      "New record. You have never flown this far.",
+      "A new best. {tier} did not stop you.",
+      "Record broken. That line was yours."
     ],
     nearRecord: [
-      "So close. {score}, and the record still stands.",
-      "{score} — your record is within reach.",
-      "You were closing in: {score}."
+      "{seconds} s short of your record. You were almost there.",
+      "Your best was {seconds} s away. So close.",
+      "Only {seconds} s left to go. The next one is yours."
     ],
     bigCombo: [
-      "A chain of {combo} grazes. The forest noticed.",
-      "{combo} grazes without breaking. That was the good stuff.",
-      "Combo {combo} — you were flying on magic alone."
+      "A combo of {combo}. Your magic held a long time.",
+      "{combo} grazes without breaking. That was fine flying.",
+      "Combo of {combo}. The trail barely dimmed."
     ],
     earlyDeath: [
-      "That was quick. The night had barely started.",
-      "Barely airborne. Again?",
-      "The very first branches got you."
+      "{tier} is still waiting for you.",
+      "A short flight. {tier} will still be there.",
+      "The night had barely started. {tier} again?"
     ],
     default: [
-      "{score} points. The forest keeps its trophies.",
-      "You reached {tier} with {score}.",
-      "{score}. The branches win this round."
+      "{tier} behind you. The forest goes on.",
+      "You held your line through {tier}. Again?",
+      "A good stretch of forest. The trees keep coming."
     ]
   }
 };

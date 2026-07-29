@@ -32,6 +32,20 @@ export const WORLD = {
   height: 854
 } as const;
 
+/**
+ * Bottom safe-area inset, in logical px.
+ *
+ * EVERY piece of interface pinned to the bottom of the screen must sit above
+ * it — the progress thread, the Replay band, anything added later. On a phone
+ * with a home indicator the last strip of screen is both visually occupied and
+ * a system gesture area: a control there is half-hidden and half-swallowed.
+ *
+ * A constant rather than a runtime query on purpose: Capacitor arrives in P7,
+ * and until then this is the one place to widen when real insets are read from
+ * `env(safe-area-inset-bottom)`.
+ */
+export const SAFE_BOTTOM = 34;
+
 /** Witch flight: hold to rise, release to fall. */
 export const WITCH = {
   x: 110,
@@ -505,12 +519,27 @@ export const MAGIC = {
   desatMax: 0.75,
   coldMoonColor: 0xb9c2d6,
 
-  // Thin bar under the score.
+  /**
+   * The combo timer, TOP of the screen. It must read as URGENCY, and must
+   * never be mistaken for the progress thread along the bottom edge. The two
+   * carry opposite meanings — one is running out, the other is going forward —
+   * so they deliberately share neither shape nor palette:
+   *
+   *   combo timer : top,    short, centred, WARM amber, pulses near zero
+   *   progress    : bottom, full width,     COLD violet, still but for the dot
+   */
   barWidth: 170,
   barHeight: 5,
   barY: 158,
-  barColor: 0xb98bff,
-  barTrackAlpha: 0.12
+  /** Warm amber: the colour of something burning down. */
+  barColor: 0xffb347,
+  barTrackAlpha: 0.12,
+  /** Below this fraction of the gauge, the bar pulses. */
+  pulseBelow: 0.3,
+  pulseHz: 3.4,
+  pulseAlphaMin: 0.45,
+  /** Extra height at the peak of a pulse, in px. */
+  pulseGrow: 3
 } as const;
 
 /** Graze feedback: obstacle halos + floating texts. */
@@ -592,7 +621,9 @@ export const SFX = {
   sparkHz: 1180,
   sparkPartialRatio: 2.5,
   sparkMs: 190,
-  sparkGain: 0.5
+  sparkGain: 0.5,
+  /** Percée approach: the swoosh detunes down by this much at full tension. */
+  tensionDetuneCents: -260
 } as const;
 
 /**
@@ -637,7 +668,9 @@ export const FIREFLIES = {
   escapeMs: 400,
   escapeRise: 54,
   /** Pool size: enough for every obstacle on screen plus those in flight. */
-  poolSize: 40
+  poolSize: 40,
+  /** Forward drift under Percée tension, px/s at full tension. */
+  tensionDrift: 26
 } as const;
 
 /**
@@ -741,6 +774,111 @@ export const MERCY = {
   clearSeconds: 20
 } as const;
 
+/**
+ * La Percée — the personal record as a PLACE in the forest rather than a
+ * number on a screen. The reference record is survival TIME (`bestTime`),
+ * which is what the tiers are already indexed on.
+ *
+ * A marker stands at that exact moment of the run: an arch of frozen fireflies
+ * and moonlight spanning the screen. Purely visual — no collision, no effect on
+ * gameplay of any kind. Crossing it is the whole point of a run.
+ */
+export const PERCEE = {
+  /**
+   * Below this personal best, no marker and no mention at all. A first run —
+   * or a record so short the arch would land on top of the player — must not
+   * put a monument three seconds into the forest.
+   */
+  minTime: 8,
+  /** Seconds of build-up before the marker: sound hollows, light shifts. */
+  approach: 4,
+  /** Crossing: slow motion, trail blaze, the arch bursts. */
+  slowMoMs: 400,
+
+  // Tension ramp, all reached at the marker itself. NONE of this may touch the
+  // obstacles or their halos — see the readability invariant in CLAUDE.md.
+  /** Extra desaturation of the SCENERY only, 0 -> this. */
+  tensionDesat: 0.35,
+  /** Ambient dust drift towards the marker, px/s. */
+  tensionDrift: 34,
+  /** Detune of the graze swoosh at full tension, in cents. */
+  tensionDetuneCents: -260,
+  /** Moon veil tint pushed towards the arch's colour. */
+  archColor: 0xbfa8ff,
+  archGlowColor: 0xffe9a8,
+  /** Arch geometry. */
+  archWidth: 46,
+  archFireflies: 22,
+  archBurst: 40,
+
+  /**
+   * The road, on the death screen: the run laid out as a horizontal band cut
+   * into tier-length segments, with where she died and where her record stands.
+   * The point is to make the gap between the two a DISTANCE, not a number.
+   */
+  road: {
+    // Sits between the cause of death and the run summary. The whole death
+    // screen is a tight column: cause 392, road here, summary 494, history
+    // 543, buttons 597. Moving it means re-checking those.
+    y: 440,
+    height: 15,
+    marginX: 26,
+    /** Road length in seconds. It stretches to fit whichever is longer. */
+    tailFactor: 1.18,
+    /** Never shorter than this, so an early death still shows a road. */
+    minSpan: 40,
+    trackColor: 0x2a2142,
+    doneColor: 0x9b6bff,
+    recordColor: 0xffd27a,
+    /** A segment narrower than this gets no name: it would be unreadable. */
+    minLabelWidth: 34,
+    labelSizePx: 10,
+    labelColor: "#8877aa",
+    captionSizePx: 16,
+    captionColor: "#d9a7ff",
+    recordCaptionColor: "#ffd27a"
+  }
+} as const;
+
+/**
+ * The progress thread, along the BOTTOM edge: the run's journey, drawn as a
+ * place rather than a readout. A hairline across the full width, small ticks
+ * at the tier boundaries, a lit notch where the record stands, and one moving
+ * point of light — the witch on her road.
+ *
+ * No text, no numbers, no opaque background. It is scenery, not a HUD.
+ *
+ * PRIORITY TO THE GAME: it is drawn UNDER the obstacles and their halos, so it
+ * can never cover them (readability invariant), and it vanishes completely
+ * during a Percée crossing so nothing competes with that moment.
+ */
+export const PROGRESS_THREAD = {
+  /** Hairline thickness. Any thicker and it starts reading as a HUD bar. */
+  height: 1.5,
+  marginX: 18,
+  /** Distance above the safe-area inset. */
+  liftAboveSafe: 10,
+
+  trackColor: 0x6b5aa0,
+  trackAlpha: 0.3,
+  tickColor: 0x9b8ad0,
+  tickAlpha: 0.55,
+  tickHeight: 5,
+  /** The record: a taller, brighter notch. */
+  notchColor: 0xd8c9ff,
+  notchAlpha: 0.9,
+  notchHeight: 11,
+
+  /** The witch's point of light. */
+  dotSize: 7,
+  dotColor: 0xd8c9ff,
+  dotAlpha: 0.9,
+
+  /** Road length in seconds, fixed at the start of a run so it never slides. */
+  minSpan: 45,
+  spanFactor: 1.15
+} as const;
+
 /** Draws the lethal hitbox, the graze ring and the collision shapes. */
 export const DEBUG_HITBOX = false;
 
@@ -753,6 +891,13 @@ export const DEBUG_STATS = false;
  * history are left alone.
  */
 export const DEBUG_RESET_TUTORIAL = false;
+
+/**
+ * Debug: dumps `moonwick:stats` to the console on boot, and exposes
+ * `window.__moonwickStats` with `dump()` and `reset()` so the lifetime numbers
+ * can be inspected and cleared without touching anything else.
+ */
+export const DEBUG_STATS_DUMP = false;
 
 // --- Guard rail (dev only): tier fairness constraint.
 // Every obstacle is the only chance to refill the combo timer, so no tier may

@@ -15,6 +15,24 @@ radius, the tier parameters and the generator are untouched.
 
 ### Added
 
+**La Percée — the personal record as a place** (`src/percee.ts`, `src/stats.ts`, `src/FlightScene.ts`, `src/config.ts`, `src/i18n.ts`, `src/sfx.ts`, `src/main.ts`)
+- Lifetime statistics under `moonwick:stats`, versioned (`version: 1`) and written exactly once per run at death — never mid-run, where a synchronous write would risk a frame hitch. Games played, total play time, best time; per tier reached/cleared/best combo; grazes total and per essence; best combo, Full Moons and time spent in them; closest graze ever; best grazes in one second. Loading is tolerant: missing or malformed fields degrade to defaults instead of wiping the profile.
+- A marker standing in the forest at the moment of the record: an arch of frozen fireflies and moonlight across the screen. Purely visual — no collision, no scoring, no effect on generation. Positioned by time (`x = WITCH.x + (bestTime - runDuration) * speed`) so it lands on the witch at exactly the record whatever the scroll speed is doing.
+- Approach ramp over `PERCEE.approach` (4 s): the sound detunes downward, the scenery desaturates, the obstacle fireflies lean forward. Scenery only — obstacles and halos are never dimmed.
+- Crossing: 400 ms of slow motion, full trail blaze, the arch bursts, and `percee` appears. The one exception to the no-words-during-play rule.
+- The gap to the record spelled out as a whole sentence on the death screen (`percee_gap`, `percee_record`, in all four languages), drawn synchronously in `die()` so the replay tap is never delayed. (A full tier-segmented road was built here first and removed when the screen was cut back.)
+- `DEBUG_STATS_DUMP` prints the lifetime stats on boot and exposes `window.__moonwickStats` with `dump()` / `reset()`.
+
+**The Scores page** (`src/ScoresScene.ts`, `src/MenuScene.ts`, `src/main.ts`, `src/i18n.ts`)
+- A new scene: the player's single progression hub, reachable from the home screen only. Best scores, recent runs and the detailed lifetime statistics, split across three pages — Records, Journal, The forest.
+- Paged by design, to take collection pages later: `PAGES` is the whole navigation model, and adding a page means adding a `{ titleKey, build() }` entry. The pager, dots, arrows and back button adapt on their own. A dev assertion refuses a page whose rows would reach the buttons.
+- 24 new i18n keys in the four languages, including the tree-species names.
+- The share-image button moved here from the death screen; it now shares the best run rather than the last one.
+
+**Progress thread and safe area** (`src/FlightScene.ts`, `src/config.ts`)
+- A hairline along the bottom edge: tier-boundary ticks, a lit notch at the record, and one moving point of light for the witch's progress. No text, no numbers, no opaque background.
+- `SAFE_BOTTOM = 34` px, applied to every bottom-anchored element including the Replay band. A constant rather than a runtime query until Capacitor lands in P7.
+
 **Reward cues, replacing the tutorial** (`src/rewardCues.ts`)
 - Fireflies: two or three per obstacle, floating in the graze ring, collected into the witch with a crystalline chime when she enters it. Purely visual — they never score a point. They are bait placed exactly where the reward is.
 - Value tag: what the obstacle is worth at the current multiplier, small, on the edge of its halo, fading in as she approaches.
@@ -57,6 +75,36 @@ radius, the tier parameters and the generator are untouched.
 - `gapSize` progression re-spread across all five tiers: 250 / 170 / 130 / 105 / 96 (was 250 / 140 / 70 / 67 / 64).
 - Lethal hitbox reduced from 10 px to 8 px, purely for perceived generosity. The graze ring is unchanged.
 - The fairness assertion now checks the interval *after* `GLOBAL_SPEED`; otherwise `clampInterval` would silently cap it and the slowdown would stop applying at the widest tiers.
+
+**Death-screen line now carries the gap inside the sentence** (`src/i18n.ts`, `src/FlightScene.ts`). Design decision: the screen shows five things, so the one line has to do two jobs — say what happened AND give a reason to go again.
+- All 15 templates rewritten in `en` and `fr`, warm and brief, never at the player's expense. `es` and `it` carry the English text behind `// TODO: écrire en natif`.
+- New `{seconds}` placeholder, used only in `nearRecord` — the one category that cannot be reached without a record to measure against. `{score}` dropped from the templates.
+- `pickDeathCategory` switched from SCORE to TIME, so it is indexed on the same record as La Percée and the quoted gap is truthful. `nearRecordRatio` (0.85) now applies to duration.
+- The gap used to be a separate sentence pasted in front of the message, which is exactly what the anti-concatenation rule forbids; it is now inside each template. `percee_gap`, `percee_record` and `percee_road` are gone from all four languages.
+- Every variant verified to render in two short lines at most, with no unresolved placeholder, in all four languages.
+
+**Interface icons made legible** (`src/icons.ts`, `src/FlightScene.ts`, `src/MenuScene.ts`). Dark-on-dark icons at low opacity were findable only if you knew they were there.
+- Both icons gained a faint full outline under a thicker moon-side rim: `ICON_STROKE` `2` → `2.8`, plus a new 1.4 px outline at 0.4 alpha.
+- Home icon: alpha `0.45` → `0.85`, scale `1` → `1.25`, touch target `60` → `64` px. Book icon: scale `1` → `1.15`, page block alpha `0.85` → `1`, spine `0.35` → `0.55`.
+- Replay stays dominant by area, not by keeping the icons dim: its band is over 200x the home target.
+
+**Progression page renamed and given an icon** (`src/ScoresScene.ts`, `src/icons.ts`, `src/MenuScene.ts`, `src/i18n.ts`). It shipped as "Grimoire" and is now "Scores".
+- The `grimoire` i18n key is gone; the displayed name is the single key `scores` (Scores / Scores / Puntuaciones / Punteggi), read by both the home button and the page title. The `grimoire.*` keys were renamed `scores.*` so the naming does not lie.
+- The scene, its key and its file were renamed to the neutral `ScoresScene` / `"scores"` / `ScoresScene.ts`, so the next rename touches no code at all.
+- New `src/icons.ts`: interface icons drawn as vectors, in the game's own visual language — dark silhouette with a silver-violet rim on the moon-facing side, direction from `MOON_ON_RIGHT`. A book for the Scores page, a house for the way home. No image file.
+
+**Death screen cut back** (`src/FlightScene.ts`). It had become a wall of numbers between the player and the replay button. Design decision, following the same playtest thread as the rebalance.
+- What remains, five things: the score (font `96px` → `128px`), ONE line of text, the progress thread frozen where the run ended, the Replay band, and the way home.
+- The way home became an icon: no label, no frame, alpha 0.45, in the top-left corner — a 60 px touch target with low visual presence. A dev assertion enforces at least 48 px of target and `REPLAY_CLEARANCE` (80 px) between any interactive element and the Replay band: a mis-tap there throws the player out of the replay loop, which is what the screen exists to protect. Measured clearance: 624 px.
+- Removed from it: the best-score line, the five-run history bar chart, the cause of death, the run summary, the tier-segmented road and the Share button. All of them now live in the Scores page.
+- The single line shows the gap to the record when there is one to chase, and the contextual message otherwise — never both.
+- No path to the Scores page from here: after dying the only two moves are Replay or Home.
+- The replay tap is unchanged: live on the first frame, everything drawn synchronously in `die()`.
+
+**Combo timer differentiated from the progress thread** (`src/config.ts`, `src/FlightScene.ts`). The two carry opposite meanings — one is running out, the other is going forward — and shared a violet palette, so they read as the same thing.
+- `MAGIC.barColor` `0xb98bff` → `0xffb347`: cold violet to warm amber, the colour of something burning down. Design decision, on top of the move below.
+- The timer now pulses below `MAGIC.pulseBelow` (0.3 of the gauge), harder as it nears zero: `pulseHz` 3.4, `pulseGrow` 3 px, `pulseAlphaMin` 0.45. It stays short, centred and at the top; the thread stays full-width, cold and still at the bottom.
+- Death-screen run summary reduced to the best combo: the tier reached is now shown by the road as a place rather than spelled out as a line.
 
 - **Collision and visuals are now separated.** Detection still runs on invisible primitives (one rectangle plus one circle per obstacle part; a circle centred on the witch's torso), and the art is built around them. The rule is one-way: the visual may overshoot the hitbox, never fall inside it.
 - **The witch's hitbox is centred on her torso**, not on her drawing's bounding box. The torso is also the sprite's origin and its rotation pivot, so art and collision cannot drift apart. Hat, cape and broom brush are never lethal.

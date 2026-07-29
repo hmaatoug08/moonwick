@@ -9,11 +9,13 @@ import {
   MERCY,
   NEAR_MISS,
   OBSTACLE_ART,
+  SAFE_BOTTOM,
   TIERS,
   TRAIL,
   WITCH,
   WORLD
 } from "./config";
+import { drawBookIcon } from "./icons";
 import { MOON_ON_RIGHT } from "./obstacleShapes";
 import { Witch } from "./witchShape";
 import { getLanguage, LANG_NAMES, LANGS, Lang, onLanguageChange, setLanguage, t } from "./i18n";
@@ -53,6 +55,10 @@ export class MenuScene extends Phaser.Scene {
   private settingsPanel!: Phaser.GameObjects.Container;
   private gearIcon!: Phaser.GameObjects.Graphics;
   private gearLabel!: Phaser.GameObjects.Text;
+  private scoresBg!: Phaser.GameObjects.Rectangle;
+  private scoresIcon!: Phaser.GameObjects.Graphics;
+  private scoresLabel!: Phaser.GameObjects.Text;
+  private scoresZone!: Phaser.Geom.Rectangle;
   private settingsOpen = false;
   private gearZone!: Phaser.Geom.Rectangle;
   private backZone!: Phaser.Geom.Rectangle;
@@ -241,6 +247,27 @@ export class MenuScene extends Phaser.Scene {
       .setDepth(20);
     this.tweens.add({ targets: this.playText, alpha: 0.35, duration: 800, yoyo: true, repeat: -1 });
 
+    // Scores: the progression hub, reachable from here and from nowhere else.
+    // A labelled button rather than an icon alone — it is a place, not a toggle.
+    // The label is `t("scores")`; the scene and its key stay neutral, so the
+    // displayed name can change without touching code.
+    const scoresStyle = { fontFamily: "sans-serif", fontStyle: "bold", fontSize: "22px" };
+    const iconSpace = 44;
+    const scoresW =
+      buttonWidth(this, "scores", scoresStyle, 22, 180, WORLD.width - 80) + iconSpace;
+    const scoresY = WORLD.height - SAFE_BOTTOM - 74;
+    this.scoresBg = this.add
+      .rectangle(cx, scoresY, scoresW, 62, 0xffffff, 0.08)
+      .setStrokeStyle(2, 0x9b6bff, 0.7)
+      .setDepth(20);
+    this.scoresIcon = this.add.graphics().setDepth(21);
+    drawBookIcon(this.scoresIcon, cx - scoresW / 2 + 32, scoresY, 1.15);
+    this.scoresLabel = this.add
+      .text(cx + 14, scoresY, "", { ...scoresStyle, color: "#d9a7ff" })
+      .setOrigin(0.5)
+      .setDepth(20);
+    this.scoresZone = new Phaser.Geom.Rectangle(cx - scoresW / 2, scoresY - 31, scoresW, 62);
+
     // Gear icon, top left (the moon occupies the right). Drawn as vectors:
     // no asset, and nothing to translate.
     const gear = this.add.graphics().setDepth(20);
@@ -294,6 +321,8 @@ export class MenuScene extends Phaser.Scene {
     this.playText.setVisible(on);
     this.gearIcon.setVisible(on);
     this.gearLabel.setVisible(on);
+    this.scoresBg.setVisible(on);
+    this.scoresLabel.setVisible(on);
   }
 
   private buildSettings(): void {
@@ -534,6 +563,9 @@ export class MenuScene extends Phaser.Scene {
       fitText(this.bestText, WORLD.width - 48, 24);
     }
 
+    this.scoresLabel.setText(t("scores"));
+    fitText(this.scoresLabel, this.scoresZone.width - 24, 22);
+
     this.playText.setText(t("menu.play"));
     fitText(this.playText, WORLD.width - 48, 30);
 
@@ -716,6 +748,11 @@ export class MenuScene extends Phaser.Scene {
         this.settingsPanel.setVisible(false);
         this.setHomeVisible(true);
       }
+      return;
+    }
+
+    if (this.scoresZone.contains(pointer.x, pointer.y)) {
+      this.scene.start("scores");
       return;
     }
 

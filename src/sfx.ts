@@ -13,6 +13,20 @@ export class Sfx {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private noise: AudioBuffer | null = null;
+  /** 0 normally, 1 at the Percée marker: the world's sound hollows out. */
+  private tension = 0;
+
+  /** Approach to the record: detunes the graze swoosh downward. */
+  setTension(k: number): void {
+    this.tension = Math.max(0, Math.min(1, k));
+  }
+
+  /** Swoosh pitch multiplier for the current tension. */
+  private tensionRatio(): number {
+    // Cents -> ratio: a negative detune drops the pitch, which is what makes
+    // the forest feel like it is holding its breath.
+    return Math.pow(2, (SFX.tensionDetuneCents * this.tension) / 1200);
+  }
 
   /** Call on a real gesture (pointerdown), otherwise the browser refuses. */
   unlock(): void {
@@ -56,7 +70,9 @@ export class Sfx {
 
     const now = ctx.currentTime;
     const duration = SFX.swooshMs / 1000;
-    const peak = Math.min(SFX.swooshBaseHz + combo * SFX.swooshHzPerCombo, SFX.swooshMaxHz);
+    const peak =
+      Math.min(SFX.swooshBaseHz + combo * SFX.swooshHzPerCombo, SFX.swooshMaxHz) *
+      this.tensionRatio();
 
     const source = ctx.createBufferSource();
     source.buffer = this.ensureNoise(ctx);
