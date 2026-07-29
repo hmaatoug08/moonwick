@@ -77,9 +77,11 @@ export class Sfx {
 
   /**
    * Graze: a short, dry breath. The filter pitch rises with the combo, so a
-   * long chain can be heard building tension.
+   * long chain can be heard building tension. A CLOSE graze sharpens the
+   * peak (`SFX.closeSharpen`) — the same breath, thinner and brighter, so
+   * closeness is heard before the number is read.
    */
-  graze(combo: number): void {
+  graze(combo: number, close = false): void {
     if (!isSoundEnabled()) return;
     const ctx = this.ensureContext();
     if (!ctx || !this.master || ctx.state !== "running") return;
@@ -88,6 +90,7 @@ export class Sfx {
     const duration = SFX.swooshMs / 1000;
     const peak =
       Math.min(SFX.swooshBaseHz + combo * SFX.swooshHzPerCombo, SFX.swooshMaxHz) *
+      (close ? SFX.closeSharpen : 1) *
       this.tensionRatio();
 
     const source = ctx.createBufferSource();

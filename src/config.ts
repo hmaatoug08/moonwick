@@ -659,6 +659,39 @@ export const SCORING = {
 } as const;
 
 /**
+ * The perfect graze — grazing graded by CLOSENESS, judged on the nearest
+ * distance reached during the pass (the same surface distance the ring
+ * itself measures). It deepens the existing skill without adding a system:
+ * the same move, done better, pays and feels better.
+ *
+ *   graze   d <= 38 (ring)      grazePoints (10) x multiplier
+ *   close   d <= closeBand      closePoints (15) x multiplier,
+ *                               gold-violet burst, sharper chime
+ *   needle  d <= needleBand     close reward + the needle-thread flash
+ *                               (slow motion already fires under 18 px)
+ *
+ * The bands nest inside the slow-motion threshold: needle (11) < close (16)
+ * < SLOWMO.thresholdPx (18) < ring (38). The needle window is 3 px above the
+ * 8 px lethal radius — rare by construction, no rarity logic needed.
+ *
+ * NO WORDS: the tiers must read on feel — the burst, the chime, the flash.
+ * The floating gain stays numeric, merely larger when close.
+ */
+export const GRAZE_TIERS = {
+  closeBand: 16,
+  needleBand: 11,
+  closePoints: 15,
+  // Close burst: a pinch of gold and a pinch of violet, both brief.
+  burstSparks: 7,
+  burstColorGold: 0xffd9a0,
+  burstColorViolet: 0xc79bff,
+  // Needle-thread flash: an additive breath of light on the witch.
+  flashSizePx: 150,
+  flashAlpha: 0.4,
+  flashMs: 190
+} as const;
+
+/**
  * Magic gauge: it drains continuously and ONLY a graze refills it.
  * It is the multiplier timer, NOT a health bar: at 0 the multiplier drops
  * back to x1 and the run continues. You only die by touching an obstacle.
@@ -808,7 +841,9 @@ export const SFX = {
   sparkMs: 190,
   sparkGain: 0.5,
   /** Percée approach: the swoosh detunes down by this much at full tension. */
-  tensionDetuneCents: -260
+  tensionDetuneCents: -260,
+  /** Close graze: the swoosh peak rises by this factor — sharper, not louder. */
+  closeSharpen: 1.3
 } as const;
 
 /**
@@ -976,11 +1011,26 @@ export const VALUE_TAG = {
  * The very first graze EVER is celebrated once, wordlessly: this is the moment
  * the whole game clicks. Never repeated — `moonwick:tutorialDone` gates it.
  */
+/**
+ * The forest teaches by choreography, not by text: on runs before the first
+ * graze ever (`moonwick:tutorialDone` unset), the first spawns are AUTHORED —
+ * trunks with the tier's gap widened by these factors, so the first halo is
+ * a huge readable invitation, the second slightly tighter, and the third
+ * onwards is the real rhythm. Wider than the tier is strictly easier, so
+ * every generation guarantee (fairness cap, reachability) holds untouched.
+ */
+export const ONBOARDING = {
+  gapScales: [1.45, 1.2]
+} as const;
+
+// First-graze celebration, strengthened with the authored opening (was
+// slowMoMs 260 / flashAlpha 0.22 / sparks 26): this is the moment the game
+// clicks, and it happens exactly once.
 export const FIRST_GRAZE = {
-  slowMoMs: 260,
-  flashAlpha: 0.22,
-  flashMs: 420,
-  sparks: 26
+  slowMoMs: 380,
+  flashAlpha: 0.3,
+  flashMs: 480,
+  sparks: 40
 } as const;
 
 // NOTE: there is deliberately no delay before the death screen accepts the

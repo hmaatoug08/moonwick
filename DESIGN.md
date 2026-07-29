@@ -462,3 +462,49 @@ per-frame exponential smoothing: every toggle, pause, tier change or mode
 change is a ramp. The grid schedules one look-ahead beat, so a dropped frame
 never drops a note, and the whole engine is O(1) per frame — nothing shows
 up against the 60 fps budget at The Wall.
+
+### The perfect graze
+
+Grazing was binary: you did it or you did not. Grading it by closeness turns
+the game's ONE skill into a depth ladder without adding a single system —
+the same move, done better, pays and feels better, and the player's inner
+sentence changes from "I survived" to "I can do better".
+
+The grade is judged on `obstacle.minDistance`, the closest surface distance
+reached during the pass — the measurement the ring, the slow motion and the
+lifetime "closest graze" stat already used, so no new geometry exists. The
+bands NEST inside what was already there: needle (11 px) < close (16) <
+slow-motion (18) < the ring (38), and the needle window sits 3 px above the
+8 px lethal radius — rare by construction, no rarity logic needed.
+
+Rewards stay wordless (the no-words rule): close pays 15 x multiplier
+instead of 10 and announces itself with a gold-violet burst and a SHARPER
+chime (the swoosh peak rises 1.3x — thinner, not louder: closeness is heard
+before the number is read); needle adds one breath of light on the witch.
+The floating gain stays numeric, merely larger and gold. Nothing is added
+for the needle's score: the flash and the slow motion ARE the reward, and a
+third pay tier would demand a third readable difference no one would parse
+at 260 px/s.
+
+### The first three trees
+
+The docs forbid tutorial text, and the first ten seconds are everything —
+so the forest teaches with choreography. On runs before the first graze
+ever (`moonwick:tutorialDone` unset), the first spawns are authored: trunks
+— the most readable shape, hole near the flight line — with the tier's gap
+widened by `ONBOARDING.gapScales` (1.45, then 1.2), then the real rhythm
+from the third tree. A huge halo the player practically falls through, a
+slightly tighter one to confirm the hunch, and the game proper.
+
+Three properties made this safe to author:
+- **wider is strictly easier**, so the fairness cap, the reachability logic
+  and the bot-clearable Edge guarantee hold without a new assertion;
+- **it composes with MERCY** — both multiply the gap, so a struggling first
+  player gets both, which is exactly right;
+- **it disappears by itself**: the sequence re-arms every run until the
+  first successful graze, then never again — the flag that gates the
+  first-graze celebration already existed, and this reads the same one.
+
+The celebration itself was strengthened with the choreography (slow motion
+260 -> 380 ms, flash 0.22 -> 0.3, sparks 26 -> 40): the moment the game
+clicks happens exactly once, and now the opening walks the player to it.

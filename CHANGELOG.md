@@ -9,6 +9,15 @@ This project follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+**The perfect graze + the first three trees** (`GRAZE_TIERS`/`ONBOARDING` in `src/config.ts`, `src/FlightScene.ts`, `src/obstacles.ts`, `src/sfx.ts`, `CLAUDE.md`, `DESIGN.md`)
+
+Two changes to the first sixty seconds, both deepening what exists rather than adding a system.
+
+- **Grazing graded by closeness** (GAMEPLAY CHANGE — scoring): judged on the pass's closest surface distance, the measurement the ring/slow-motion/closest-graze stat already used. Under `closeBand` (16 px) a graze pays **15 x multiplier instead of 10**, with a gold-violet burst and a sharper chime (swoosh peak x1.3 — thinner, not louder); under `needleBand` (11 px) the needle-thread flash joins — one breath of light on the witch, no extra points: the flash and the existing slow motion are the reward. Bands nest inside what existed: 11 < 16 < `SLOWMO.thresholdPx` 18 < ring 38; the needle window sits 3 px above the 8 px lethal radius, rare by construction. No words anywhere; the floating gain stays numeric, larger and gold when close. Feedback objects are pooled (one burst emitter, one flash image).
+- **The authored opening**: on runs before the first graze ever, the first spawns are trunks with the tier's gap widened by `ONBOARDING.gapScales` (x1.45, then x1.2), then the real rhythm — the forest teaching by choreography, not text. Wider is strictly easier, so the fairness cap, reachability and the bot-clearable Edge hold untouched; it composes with MERCY (both multiply the gap — verified in play: 416/341 px openings with easing active against 287 normal) and disappears forever at the first successful graze.
+- **First-graze celebration strengthened** with the opening that now leads to it: `FIRST_GRAZE.slowMoMs` 260 -> 380, `flashAlpha` 0.22 -> 0.3, `sparks` 26 -> 40 (design decision: the click moment happens exactly once).
+- Verified live: authored gaps spawn as trunks and scale correctly; needle graze paid 23 at x1.5 (15-base) vs 20 at x2 (10-base) for a normal graze; the flash fired; `tutorialDone` gates the whole opening off.
+
 **Adaptive music, entirely synthesised** (`src/music.ts` new, `MUSIC` in `src/config.ts`, `src/sfx.ts`, `src/save.ts`, `src/i18n.ts`, `src/FlightScene.ts`, `src/MenuScene.ts`, `CLAUDE.md`, `DESIGN.md`)
 
 No audio file — the zero-asset pillar holds, and now says so explicitly in CLAUDE.md ("no asset files, images OR audio"). Built on the effects' own AudioContext (`audioContext()`/`unlockAudio()` extracted from sfx.ts), never a second one.

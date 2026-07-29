@@ -62,6 +62,7 @@ The last `HISTORY.size` (5) scores are kept in `moonwick:history` and shown on t
 
 ### Score
 - Graze: **10 x multiplier**. Shown large at the graze position.
+- **Graded by closeness** (`GRAZE_TIERS`, judged on the pass's closest surface distance): under `closeBand` (16 px) the graze pays **15 x multiplier** with a gold-violet burst and a sharper chime; under `needleBand` (11 px) the needle-thread flash joins in. **NO WORDS** — the tiers read on feel, the floating gain stays numeric. Bands nest inside the slow-motion threshold: 11 < 16 < 18 < 38. -> DESIGN.md, "The perfect graze".
 - Obstacle passed **while the combo is at 0**: `SCORING.darkPointsSequence = [1, 1, 1, 0]` — the Nth obstacle of the current run through the dark awards the Nth value, then **0 beyond that**. Shown small and discreet (nothing is shown when the value is 0).
 - The sequence counter **restarts as soon as a graze revives the combo**.
 - Obstacle passed while the combo is active: **0 points**. Only grazes score.
@@ -77,6 +78,8 @@ The last `HISTORY.size` (5) scores are kept in `moonwick:history` and shown on t
 
 ### Communicating the reward, not the rule (IMPORTANT — replaced the tutorial)
 No tutorial and no instruction: the game shows what grazing pays instead of explaining the rule (`src/rewardCues.ts`). -> DESIGN.md, "Communicating the reward".
+
+**The forest opens with choreography, not text** (`ONBOARDING`, config.ts): on runs before the first graze ever, the first spawns are authored — trunks with the gap widened by `gapScales` (1.45, 1.2), then the real rhythm. Wider is strictly easier, so every generation guarantee (fairness cap, reachability, bot-clearable Edge) holds untouched. It composes with MERCY (both multiply the gap) and disappears forever at the first successful graze. -> DESIGN.md, "The first three trees".
 - **NO WORDS DURING PLAY.** The only text visible in a live run is numeric: the score, the multiplier, the floating gains and the value tag. Anything that reads as an instruction is a bug. Two non-numeric strings are allowed, neither of them an instruction: the tier name at a tier change (`announceTier`), and `percee` when the player crosses their own record — at most once per run, and never on a first run.
 - **Fireflies are purely visual and never score a point** (a dev assertion keeps them strictly inside the graze ring); the **value tag sits on the obstacle's LEFT**, the side she reads before deciding; both are pooled (`FIREFLIES.poolSize`, `VALUE_TAG.poolSize`), attachment tracked in a `WeakSet` of obstacles and never inferred from live fireflies.
 - **READABILITY INVARIANT: obstacles and their graze halos are never darkened or degraded by any visual effect** (combo loss, tier transitions, Full Moon, and so on). The darkness overlay is drawn **under** the gameplay layer and only touches the background and scenery; combo loss is expressed through **desaturation and cooling** of the scenery (overlay capped at 0.5), and the moon rim on the obstacles **strengthens** as the light fades. This is the information the player needs most when at x1 — any future art direction must preserve this invariant.
