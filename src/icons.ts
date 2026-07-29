@@ -48,11 +48,19 @@ function silhouette(
 }
 
 /**
- * A closed book, seen slightly from the side: the cover as a rounded slab and
- * the spine as a band along its moon-facing edge.
+ * An OPEN book: two pages splayed from a central gutter.
+ *
+ * The closed-book version that shipped first read as a dark rectangle with a
+ * pale stripe — it could as easily have been a card or a door. Open is the
+ * universal book glyph: the two page panels and the gutter between them are
+ * legible at 26 px in a way a slab never is, because the shape itself is
+ * distinctive rather than the decoration on it.
+ *
+ * The gutter sits LOWER than the outer corners, which is how an open book
+ * actually sags — that sag is most of what sells it.
  *
  * @param x,y  centre of the icon
- * @param scale 1 = a 26 x 32 px book
+ * @param scale 1 = a 30 x 22 px book
  */
 export function drawBookIcon(
   g: Phaser.GameObjects.Graphics,
@@ -61,38 +69,37 @@ export function drawBookIcon(
   scale = 1,
   alpha = 1
 ): void {
-  const w = 11 * scale;
-  const h = 14 * scale;
+  const w = 15 * scale;
+  const h = 9 * scale;
+  const sag = 3.5 * scale;
   const side = MOON_ON_RIGHT ? 1 : -1;
-  const spineX = x - side * w;
-  const edgeX = x + side * w;
 
-  // Cover: a solid slab. Ruled lines were tried and made it read as a list
-  // icon rather than a book — the volume has to come from the spine and the
-  // page block instead.
-  const left = Math.min(spineX, edgeX);
-  g.fillStyle(ICON_BODY, alpha);
-  g.fillRoundedRect(left, y - h, w * 2, h * 2, 3 * scale);
-  // Full outline, faint: without it the dark cover melts into the night sky.
-  g.lineStyle(1.4, ICON_RIM, alpha * 0.45);
-  g.strokeRoundedRect(left, y - h, w * 2, h * 2, 3 * scale);
+  const page = (dir: number): Phaser.Types.Math.Vector2Like[] => [
+    { x: x + dir * w, y: y - h },
+    { x, y: y - h + sag },
+    { x, y: y + h },
+    { x: x + dir * w, y: y + h - sag }
+  ];
 
-  // Page block: a pale sliver along the lit edge, which is what says "book".
-  const pageW = 3.6 * scale;
-  g.fillStyle(ICON_RIM, alpha);
-  g.fillRoundedRect(
-    Math.min(edgeX, edgeX - side * pageW),
-    y - h + 2 * scale,
-    pageW,
-    h * 2 - 4 * scale,
-    1.5 * scale
-  );
+  for (const dir of [-1, 1]) {
+    const pts = page(dir);
+    g.fillStyle(ICON_BODY, alpha);
+    g.fillPoints(pts, true);
+    // Faint full outline: a near-black page on a night sky needs an edge or it
+    // is not there at all.
+    g.lineStyle(1.4, ICON_RIM, alpha * 0.5);
+    g.strokePoints(pts, true);
+  }
 
-  // Spine: a band on the shaded side, and the rim down the lit edge.
-  g.fillStyle(ICON_RIM, alpha * 0.55);
-  g.fillRect(Math.min(spineX, spineX + side * 2.8 * scale), y - h, 2.8 * scale, h * 2);
+  // The gutter: the single line that says "two pages" rather than "one panel".
+  g.lineStyle(1.6 * scale, ICON_RIM, alpha * 0.7);
+  g.lineBetween(x, y - h + sag, x, y + h);
+
+  // Moon-facing page: its outer edge takes the full rim, so the light still
+  // comes from one place.
+  const lit = page(side);
   g.lineStyle(ICON_STROKE, ICON_RIM, alpha);
-  g.lineBetween(edgeX, y - h + 1.5 * scale, edgeX, y + h - 1.5 * scale);
+  g.strokePoints([lit[0], lit[3]], false);
 }
 
 /**

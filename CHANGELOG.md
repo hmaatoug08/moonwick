@@ -92,6 +92,7 @@ radius, the tier parameters and the generator are untouched.
 - The `grimoire` i18n key is gone; the displayed name is the single key `scores` (Scores / Scores / Puntuaciones / Punteggi), read by both the home button and the page title. The `grimoire.*` keys were renamed `scores.*` so the naming does not lie.
 - The scene, its key and its file were renamed to the neutral `ScoresScene` / `"scores"` / `ScoresScene.ts`, so the next rename touches no code at all.
 - New `src/icons.ts`: interface icons drawn as vectors, in the game's own visual language — dark silhouette with a silver-violet rim on the moon-facing side, direction from `MOON_ON_RIGHT`. A book for the Scores page, a house for the way home. No image file.
+- The book was redrawn OPEN — two page panels splayed from a sagging central gutter (30 x 22 px) — after the closed-book version read as a dark slab with a pale stripe, indistinguishable from a card or a door at 26 px. The shape itself now carries the meaning instead of the decoration on it.
 
 **Death screen cut back** (`src/FlightScene.ts`). It had become a wall of numbers between the player and the replay button. Design decision, following the same playtest thread as the rebalance.
 - What remains, five things: the score (font `96px` → `128px`), ONE line of text, the progress thread frozen where the run ended, the Replay band, and the way home.
