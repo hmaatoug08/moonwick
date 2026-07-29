@@ -8,6 +8,8 @@ import {
   FEEDBACK,
   FIRST_GRAZE,
   FULL_MOON,
+  GRAZE_TIERS,
+  ONBOARDING,
   GLOBAL_SPEED,
   HISTORY,
   MAGIC,
@@ -179,6 +181,9 @@ export class FlightScene extends Phaser.Scene {
 
   private trailEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
   private ambient!: Phaser.GameObjects.Particles.ParticleEmitter;
+  /** Close-graze burst and needle-thread flash: pooled feedback objects. */
+  private grazeBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private needleFlash!: Phaser.GameObjects.Image;
   /** Key of the last mood state applied (avoids pointless redraws). */
   private lastAmbianceKey = "";
   /** Current HUD polarity, so colours are only reassigned when it flips. */
@@ -337,6 +342,25 @@ export class FlightScene extends Phaser.Scene {
       blendMode: Phaser.BlendModes.ADD
     });
     this.ambient.setDepth(DEPTH_AMBIENT);
+
+    // Close-graze burst: a pinch of gold and violet at the graze point, and
+    // the needle-thread flash for the rarest passes. Pooled, never per-graze.
+    this.grazeBurst = this.add.particles(0, 0, SPARK_KEY, {
+      speed: { min: 40, max: 150 },
+      lifespan: 420,
+      scale: { start: 0.55, end: 0 },
+      alpha: { start: 0.9, end: 0 },
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false
+    });
+    this.grazeBurst.setDepth(6);
+    this.needleFlash = this.add
+      .image(0, 0, LIGHT_KEY)
+      .setDisplaySize(GRAZE_TIERS.flashSizePx, GRAZE_TIERS.flashSizePx)
+      .setTint(0xfff6e2)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setVisible(false)
+      .setDepth(6);
 
     // Trail: a single emitter following the witch, tuned by the combo.
     this.trailEmitter = this.add.particles(0, 0, SPARK_KEY, {
@@ -825,6 +849,10 @@ export class FlightScene extends Phaser.Scene {
     music.setMode("run");
     music.reseed();
     this.spawner.reset();
+    // Before the first graze ever, the forest opens with authored trees: a
+    // huge readable invitation, then tighter, then the real rhythm. The
+    // choreography re-arms every run until the first graze lands.
+    if (!isTutorialDone()) this.spawner.setOnboarding(ONBOARDING.gapScales);
     this.trailEmitter.killAll();
 
     this.witch.reset(WITCH.x, WORLD.height / 2);
@@ -1220,15 +1248,43 @@ export class FlightScene extends Phaser.Scene {
       this.grazeTimes.length
     );
 
-    const points = Math.round(SCORING.grazePoints * this.multiplier);
+    // Grading by closeness (see GRAZE_TIERS): the same move, done better,
+    // pays and feels better. No words — the tiers read on the burst, the
+    // sharper chime and the needle-thread flash alone.
+    const closest = obstacle.minDistance;
+    const close = closest <= GRAZE_TIERS.closeBand;
+    const needle = closest <= GRAZE_TIERS.needleBand;
+    const base = close ? GRAZE_TIERS.closePoints : SCORING.grazePoints;
+    const points = Math.round(base * this.multiplier);
     this.score += points;
     this.spawnFloater(obstacle.grazeX, obstacle.grazeY, t("float.graze", { points }), {
-      fontSize: "30px",
+      fontSize: close ? "34px" : "30px",
       fontStyle: "bold",
-      color: FEEDBACK.grazeColor
+      color: close ? TYPE.gold : FEEDBACK.grazeColor
     });
 
-    this.sfx.graze(this.combo);
+    if (close) {
+      this.grazeBurst.setParticleTint(GRAZE_TIERS.burstColorGold);
+      this.grazeBurst.emitParticleAt(obstacle.grazeX, obstacle.grazeY, GRAZE_TIERS.burstSparks);
+      this.grazeBurst.setParticleTint(GRAZE_TIERS.burstColorViolet);
+      this.grazeBurst.emitParticleAt(obstacle.grazeX, obstacle.grazeY, GRAZE_TIERS.burstSparks);
+    }
+    if (needle) {
+      // The needle thread: one breath of light on the witch, nothing else.
+      this.needleFlash
+        .setPosition(this.witch.x, this.witch.y)
+        .setAlpha(GRAZE_TIERS.flashAlpha)
+        .setVisible(true);
+      this.tweens.add({
+        targets: this.needleFlash,
+        alpha: 0,
+        duration: GRAZE_TIERS.flashMs,
+        ease: "Quad.easeOut",
+        onComplete: () => this.needleFlash.setVisible(false)
+      });
+    }
+
+    this.sfx.graze(this.combo, close);
 
     // The witch flinches away from what she just brushed: a micro-lean plus a
     // ripple through the cape, gone in 150 ms. The side is read from the free

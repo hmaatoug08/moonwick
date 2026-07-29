@@ -165,6 +165,12 @@ export class ObstacleSpawner {
   private passY = WORLD.height / 2;
   private lastCategory: ObstacleCategory | null = null;
   private sameCategoryStreak = 0;
+  /**
+   * Authored opening (first-ever runs): gap-size multipliers consumed one per
+   * spawn, trunks only — the most readable shape, hole near the flight line.
+   * Widening is strictly easier, so every generation guarantee holds.
+   */
+  private onboarding: number[] = [];
 
   constructor(private readonly scene: Phaser.Scene) {
     ensureObstacleTextures(scene);
@@ -184,6 +190,14 @@ export class ObstacleSpawner {
     this.passY = WORLD.height / 2;
     this.lastCategory = null;
     this.sameCategoryStreak = 0;
+    // The authored opening does not survive a reset by itself: the scene
+    // re-arms it while the first graze ever is still pending.
+    this.onboarding.length = 0;
+  }
+
+  /** Arm the authored opening: one gap-size multiplier per upcoming spawn. */
+  setOnboarding(gapScales: readonly number[]): void {
+    this.onboarding = [...gapScales];
   }
 
   update(dt: number, diff: Difficulty): void {
@@ -208,8 +222,10 @@ export class ObstacleSpawner {
   }
 
   private spawn(diff: Difficulty): void {
-    const gapSize = diff.gapSize;
-    const category = this.pickCategory();
+    // Authored opening: consume one widened, trunk-only step per spawn.
+    const authored = this.onboarding.shift();
+    const gapSize = diff.gapSize * (authored ?? 1);
+    const category = authored !== undefined ? "trunk" : this.pickCategory();
     const container = this.scene.add
       .container(WORLD.width + OBSTACLES.spawnMargin, 0)
       .setDepth(OBSTACLE_DEPTH);
