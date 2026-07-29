@@ -900,7 +900,29 @@ export const MUSIC = {
   chimeDecayS: 1.2,
 
   /** Smoothing time constant for every level move: ramps, never cuts. */
-  smoothS: 0.6
+  smoothS: 0.6,
+
+  // SPACE — a convolution reverb whose impulse response is GENERATED at boot
+  // (shaped noise, darkening tail): the depth of a real room, still zero
+  // files. The bed gets a small send; plucks and chimes ride it openly.
+  reverbSeconds: 2.8,
+  /** Tail shape: higher = faster early decay. */
+  reverbDecay: 3.2,
+  reverbBedSend: 0.16,
+  reverbPluckSend: 0.5,
+  reverbReturn: 0.8,
+
+  // VOICE — what turns "oscillator" into "instrument".
+  /** Plucks: octave partial and a breath of noise at note-on. */
+  pluckPartialGain: 0.3,
+  pluckNoiseGain: 0.1,
+  /** Plucks start this fraction sharp and settle — a plucked string does. */
+  pluckPitchSettle: 0.012,
+  /** Rhythm thump: pitch drops from this ratio to 1 — a soft drum skin. */
+  thumpPitchDrop: 1.35,
+  /** Pad width: a third detune pair, further out and quieter. */
+  padWideCents: 11,
+  padWideGain: 0.35
 } as const;
 
 /**

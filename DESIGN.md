@@ -453,6 +453,17 @@ a hard audio cut reads as an event, and losing the combo is already
 punished enough. Retreating by fade is the sonic equivalent of the scenery's
 desaturation: a mood draining, not a door slamming.
 
+**Why the reverb is generated.** Dry oscillators sound like a test tone
+because every recorded instrument stands in a room; the room IS most of the
+difference between "oscillator" and "produced". A ConvolverNode needs an
+impulse response, which is normally a file — but an IR is just shaped noise,
+so it is computed at boot instead: stereo noise under an exponential decay,
+low-passed harder as the tail ages so the room darkens the way real rooms
+do. The pillar holds even here. The voices got the same treatment: plucks
+carry an octave partial, a breath of noise at note-on and a pitch that
+settles from a hair sharp (a plucked string does exactly that); the rhythm
+is a pitch-falling thump — a drum skin, not a note.
+
 **Mechanics.** One singleton, because the bed must carry across the
 menu -> run -> death loop without a seam inside the 300 ms replay rule.
 Standing oscillators start once and are mixed (starting nodes clicks; a
