@@ -147,6 +147,29 @@ The interface speaks through TYPE, HAIRLINES and SPACE — never through boxes. 
 
 **Gold is rationed**: records, rewards, Full Moon, the active choice. Amber stays the combo timer alone. Violet is hairlines at 12–30 % alpha, no longer a border on everything. Touch targets keep the 44/48 px floors regardless of how quiet the paint is — "no box" changes what is drawn, never what is tappable.
 
+### The mark — "the lit crescent" (`src/logo.ts`, `LOGO` in config.ts)
+
+A waxing crescent with the game's witch flying out of its bay — SHE lights
+the wick, the flame above the upper horn. One routine (`drawCrescentMark`)
+serves every surface so the mark can never fork; Canvas 2D at boot, no image
+file. -> DESIGN.md, "The mark".
+
+- **The lit side follows the moon** (`MOON_ON_RIGHT`), exactly like the
+  obstacle rims.
+- **TWO-TIER RULE: no witch below `LOGO.witchMinPx` (88 px) of mark.** Full
+  lockups (home, share) carry her; small and dense uses (favicon, dense
+  chrome) are crescent and flame alone. A smudge is worse than an absence.
+- **Small sizes thicken** (`LOGO.small`/`tiny`): the crescent widens and the
+  flame rounds into a dot below ~28 px. The favicon is the `tiny` recipe.
+- **The stacked lockup** on the home screen is mark / wordmark / flame-diamond
+  divider, then ONE line: the best score once it exists, the tagline
+  (`menu.tagline`, i18n like any interface string) on a first launch. Never
+  both.
+- **DON'T:** no outline around the crescent, no second flame, no rotation, no
+  gradient across the wordmark, and never a violet flame on a dark ground —
+  it stops reading as fire. Only the flame is gold: two golds in one lockup
+  and neither reads as light.
+
 ## Roadmap
 - [x] **P1 — Skeleton**: hold/release flight, one scrolling obstacle, 60 fps.
 - [x] **P2 — Procedural**: varied obstacle generation, playable spacing, constant scroll.

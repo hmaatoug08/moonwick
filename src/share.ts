@@ -1,5 +1,6 @@
 import { BRAND, TYPE } from "./config";
 import { t } from "./i18n";
+import { drawCrescentMark } from "./logo";
 
 /**
  * Shareable score image, drawn on an OFF-SCREEN 1080x1920 canvas.
@@ -124,8 +125,10 @@ function drawCard(data: ShareData): HTMLCanvasElement {
   ctx.fillText(combo, W / 2, 1110);
   ctx.letterSpacing = "0px";
 
-  // Brand, discreet, at the bottom. Never translated (same treatment as the
-  // home screen logo: serif light, wide letter-spacing, outside i18n).
+  // Brand at the bottom: the lit-crescent mark over the wordmark — the same
+  // stacked lockup as the home screen, discreet. Never translated.
+  const markSize = 96;
+  drawCrescentMark(ctx, W / 2 - markSize / 2, H - 300, markSize);
   ctx.fillStyle = "rgba(244,238,224,0.55)";
   fitFont(ctx, BRAND.name, 52, maxTextWidth, "300");
   ctx.letterSpacing = `${Math.round(BRAND.letterSpacing * 0.9)}px`;

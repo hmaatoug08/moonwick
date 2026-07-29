@@ -4,6 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Moonwick</title>
+  <!-- The lit crescent at favicon size: the "tiny" recipe from the brand
+       sheet — crescent thickened, flame rounded to a dot, because a hairline
+       sliver and a teardrop both vanish below ~28 px. Inline SVG, no file. -->
+  <link
+    rel="icon"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230a0718'/%3E%3Cmask id='m'%3E%3Crect width='100' height='100' fill='white'/%3E%3Ccircle cx='34' cy='56' r='34' fill='black'/%3E%3C/mask%3E%3Ccircle cx='50' cy='56' r='40' fill='%23f4eee0' mask='url(%23m)'/%3E%3Ccircle cx='77' cy='13' r='9' fill='%23ffd9a0'/%3E%3C/svg%3E"
+  />
   <!-- The two faces of the art direction: a light high-contrast serif for the
        logo, titles and numerals, and a geometric sans for small-caps labels.
        main.ts awaits these before booting Phaser, so fitText/buttonWidth

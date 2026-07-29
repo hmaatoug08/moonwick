@@ -9,6 +9,17 @@ This project follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+**The mark — "the lit crescent", with the witch** (`src/logo.ts` new, `LOGO` in `src/config.ts`, `src/MenuScene.ts`, `src/share.ts`, `src/i18n.ts`, `index.html`, `CLAUDE.md`, `DESIGN.md`)
+
+Implemented from the Claude Design brand sheet ("Moonwick — logo"). The name is two things — a moon and a wick — so the mark is one shape doing both: a waxing crescent whose upper horn carries a candle flame, and THE WITCH is what lights it: she flies out of the crescent's bay on the game's own tilt (−14°), her golden trail arcing up the inner edge to the horn. Canvas 2D at boot; no image file.
+
+- Her silhouette is transcribed from `witchShape.ts` — the same broom, brush, cape, core-disc and single-hat polygons, rim offset towards the moon — in her own colours (`LOGO.witchBody`/`witchRim`). She is the character the game draws, not a redrawing.
+- **Two-tier rule** (`LOGO.witchMinPx` = 88): the witch rides in every full lockup at 88 px of mark or more (home lockup at 96 px, share image at 96 px); below that the mark is crescent and flame alone — at ~30 px of silhouette she is a smudge, and a smudge is worse than an absence.
+- One drawing routine (`drawCrescentMark`) serves the Phaser texture and the share image, so the mark cannot fork. The canonical mark is lit-right; the whole buffer mirrors when `MOON_ON_RIGHT` flips — witch, trail and flame as one piece.
+- Home screen: the stacked lockup — mark over wordmark, flame-diamond divider (replacing the moon-arc), then one line: the best score once it exists, or the brand tagline on a first launch (`menu.tagline`, new key in the four languages). The long-press debug gesture now covers the whole lockup.
+- Small-size recipes (`LOGO.small`/`tiny`): the crescent thickens and the flame rounds to a dot below ~28 px, where a sliver and a teardrop both vanish. The favicon (inline SVG in index.html) is the `tiny` recipe.
+- Rules in CLAUDE.md (two-tier rule, lit side, don'ts), reasoning in DESIGN.md ("The mark") — per development rule 9.
+
 **CLAUDE.md split in two: rules here, reasoning in DESIGN.md** (`CLAUDE.md`, `DESIGN.md` new, `CHANGELOG.md`)
 
 Documentation only — no source file was touched and no gameplay, scoring or
