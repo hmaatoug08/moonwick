@@ -19,6 +19,7 @@ import {
   PROGRESS_THREAD,
   SAFE_BOTTOM,
   OBSTACLE_ART,
+  SCENERY,
   SCORING,
   SHAKE,
   SLOWMO,
@@ -26,6 +27,7 @@ import {
   TIERS,
   tierSky,
   TRAIL,
+  TYPE,
   WITCH,
   WORLD
 } from "./config";
@@ -44,9 +46,10 @@ import { PerceeMarker, perceeTension } from "./percee";
 import { drawHomeIcon } from "./icons";
 import { RewardCues } from "./rewardCues";
 import { loadLifetimeStats, recordRunStats, type LifetimeStats } from "./stats";
+import { addMoon, NightScenery } from "./scenery";
 import { Sfx } from "./sfx";
 import { ensureTextures, LIGHT_KEY, LIGHT_SIZE, SPARK_KEY } from "./textures";
-import { fitText } from "./ui";
+import { actionBand, fitText } from "./ui";
 import { Witch } from "./witchShape";
 
 /** Current interpolated parameters: difficulty + sky mood. */
@@ -55,8 +58,10 @@ type TierParams = Difficulty & { skyTop: number; skyBottom: number };
 const MOON_COLOR = 0xf5efd8;
 
 // HUD colours for the normal (dark) palette; MOON_EYE holds the inverted ones.
-const HUD_SCORE_COLOR = "#f5efd8";
-const HUD_MULT_COLOR = "#d9a7ff";
+// Score in cream serif; the multiplier in gold — the reward colour, rationed
+// to records, rewards and Full Moon (see TYPE in config.ts).
+const HUD_SCORE_COLOR = TYPE.cream;
+const HUD_MULT_COLOR = TYPE.gold;
 
 /** Zeroed per-essence counters, for the run's graze breakdown. */
 function emptyEssenceCounts(): Record<Essence, number> {
@@ -180,8 +185,10 @@ export class FlightScene extends Phaser.Scene {
   /** Current obstacle outline alpha (rises as the light fades). */
   private obstacleStrokeAlpha: number = OBSTACLE_ART.rimAlphaLit;
   private sky!: Phaser.GameObjects.Graphics;
+  private scenery!: NightScenery;
   private tierText!: Phaser.GameObjects.Text;
-  private moon!: Phaser.GameObjects.Arc;
+  private moon!: Phaser.GameObjects.Image;
+  private moonIdleGlow!: Phaser.GameObjects.Image;
   private moonGlow!: Phaser.GameObjects.Arc;
   private moonVeil!: Phaser.GameObjects.Rectangle;
 
@@ -211,6 +218,7 @@ export class FlightScene extends Phaser.Scene {
 
   /** Animated death-screen scenery: same spirit as the home screen. */
   private deathScene: Array<{ setVisible(v: boolean): void }> = [];
+  private deathScenery!: NightScenery;
   private deathWitch!: Witch;
   private deathDust!: Phaser.GameObjects.Particles.ParticleEmitter;
   private deathTrail!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -297,12 +305,19 @@ export class FlightScene extends Phaser.Scene {
     // Night sky gradient, redrawn on every tier change (mood).
     this.sky = this.add.graphics();
 
+    // Living background — stars, parallax treelines, mist. Added right after
+    // the sky so it stays under the moon, the dust (1), the darkness overlay
+    // (2) and the whole gameplay layer: pure scenery, per the invariant.
+    this.scenery = new NightScenery(this);
+
     // Moon + its Full Moon halo (invisible until the multiplier hits the cap).
     this.moonGlow = this.add
       .circle(MOON.x, MOON.y, FULL_MOON.glowRadius, FULL_MOON.glowColor, 1)
       .setAlpha(0)
       .setBlendMode(Phaser.BlendModes.ADD);
-    this.moon = this.add.circle(MOON.x, MOON.y, 34, MOON_COLOR, 0.9);
+    const moonPieces = addMoon(this, MOON_COLOR);
+    this.moon = moonPieces.moon;
+    this.moonIdleGlow = moonPieces.glow;
 
     ensureTextures(this);
 
@@ -360,13 +375,13 @@ export class FlightScene extends Phaser.Scene {
       .setDepth(DEPTH_DARKNESS);
     this.lightBrush = this.make.image({ key: LIGHT_KEY, add: false }).setOrigin(0.5);
 
-    // Tier announcement: name in large type, centred, above the night veil.
+    // Tier announcement: the place's name in serif, centred, above the veil.
     this.tierText = this.add
       .text(WORLD.width / 2, WORLD.height * 0.42, "", {
-        fontFamily: "sans-serif",
-        fontStyle: "bold",
+        fontFamily: TYPE.serif,
+        fontStyle: "400",
         fontSize: "42px",
-        color: "#f5efd8"
+        color: TYPE.cream
       })
       .setOrigin(0.5)
       .setDepth(21)
@@ -432,25 +447,32 @@ export class FlightScene extends Phaser.Scene {
   }
 
   private buildHud(): void {
+    // Serif light numeral with a dark halo: readable over any sky, and quiet
+    // in a way the old 64 px bold sans never was.
     this.scoreText = this.add
-      .text(WORLD.width / 2, 46, "0", {
-        fontFamily: "sans-serif",
-        fontStyle: "bold",
-        fontSize: "64px",
+      .text(WORLD.width / 2, 44, "0", {
+        fontFamily: TYPE.serif,
+        fontStyle: "300",
+        fontSize: "72px",
         color: HUD_SCORE_COLOR
       })
       .setOrigin(0.5, 0)
       .setDepth(20);
+    this.scoreText.setShadow(0, 0, "rgba(5,4,12,0.9)", 22, false, true);
 
+    // The multiplier is a small-caps mark in gold — the reward colour, since
+    // the multiplier IS the reward. Letterspaced by hand (canvas has no
+    // font-variant), same recipe as every label.
     this.multiplierText = this.add
-      .text(WORLD.width / 2, 116, "×1", {
-        fontFamily: "sans-serif",
-        fontStyle: "bold",
-        fontSize: "26px",
+      .text(WORLD.width / 2, 126, "×1", {
+        fontFamily: TYPE.sans,
+        fontStyle: "700",
+        fontSize: "13px",
         color: HUD_MULT_COLOR
       })
       .setOrigin(0.5, 0)
       .setDepth(20);
+    this.multiplierText.setLetterSpacing(13 * 0.3);
 
     // Magic gauge: thin, discreet bar just below the multiplier.
     const barX = (WORLD.width - MAGIC.barWidth) / 2;
@@ -484,6 +506,10 @@ export class FlightScene extends Phaser.Scene {
     sky.fillGradientStyle(tier.skyTop, tier.skyTop, tier.skyBottom, tier.skyBottom, 1);
     sky.fillRect(0, 0, WORLD.width, WORLD.height);
 
+    // The same living background as the run, lifted above the dead world.
+    this.deathScenery = new NightScenery(this).setDepth(28);
+    this.deathScenery.setMood(tier.skyTop, tier.skyBottom);
+
     // Soft glow: the radial texture, not a solid circle (ugly hard edge).
     const glow = this.add
       .image(MOON.x, MOON.y, LIGHT_KEY)
@@ -492,7 +518,8 @@ export class FlightScene extends Phaser.Scene {
       .setAlpha(0.3)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(28);
-    const moon = this.add.circle(MOON.x, MOON.y, 34, MOON_COLOR, 0.9).setDepth(28);
+    const moonPieces = addMoon(this, MOON_COLOR, 28);
+    const moon = moonPieces.moon;
 
     this.deathDust = this.add
       .particles(0, 0, SPARK_KEY, {
@@ -526,7 +553,16 @@ export class FlightScene extends Phaser.Scene {
     this.deathWitch = new Witch(this, WORLD.width / 2, DEATH_WITCH_Y, 29);
     this.deathTrail.startFollow(this.deathWitch.follow, TRAIL.offsetX, 0);
 
-    this.deathScene = [sky, glow, moon, this.deathDust, this.deathTrail, this.deathWitch];
+    this.deathScene = [
+      sky,
+      this.deathScenery,
+      glow,
+      moonPieces.glow,
+      moon,
+      this.deathDust,
+      this.deathTrail,
+      this.deathWitch
+    ];
     this.setDeathSceneVisible(false);
   }
 
@@ -546,6 +582,7 @@ export class FlightScene extends Phaser.Scene {
 
   /** The death-screen witch roams inside the free band at the top. */
   private updateDeathScene(time: number, dt: number): void {
+    this.deathScenery.update(dt, SCENERY.menuDriftPxS);
     const t = time / 1000;
     const y = DEATH_WITCH_Y + Math.sin(t * 1.6) * 26;
     // Her own vertical speed drives the tilt, so she banks through the loop.
@@ -561,27 +598,31 @@ export class FlightScene extends Phaser.Scene {
     // Light veil: the animated scenery stays visible beneath, text stays crisp.
     const veil = this.add.rectangle(0, 0, WORLD.width, WORLD.height, 0x05030c, 0.34).setOrigin(0, 0);
 
-    // THE SCORE, very large. The one number worth a glance.
+    // THE SCORE, very large: a serif light numeral, not a poster headline.
     this.deathScoreText = this.add
-      .text(cx, 330, "0", {
-        fontFamily: "sans-serif",
-        fontStyle: "bold",
-        fontSize: "128px",
-        color: "#f5efd8"
+      .text(cx, 350, "0", {
+        fontFamily: TYPE.serif,
+        fontStyle: "300",
+        fontSize: "132px",
+        color: TYPE.cream
       })
       .setOrigin(0.5);
 
+    // A short hairline separates the number from its sentence — the same
+    // gesture as the header dividers, without the diamond.
+    const messageRule = this.add.rectangle(cx, 434, 68, 1, TYPE.hairline, 0.45);
+
     // ONE line: the contextual message, or the gap to the record when there is
-    // one to chase. Word-wrapped rather than shrunk, so a long sentence in any
-    // language stays readable instead of turning tiny.
+    // one to chase. Serif italic — spoken, not printed. Word-wrapped rather
+    // than shrunk, so a long sentence in any language stays readable.
     this.messageText = this.add
-      .text(cx, 438, "", {
-        fontFamily: "sans-serif",
-        fontStyle: "bold",
-        fontSize: "22px",
-        color: "#d9a7ff",
+      .text(cx, 496, "", {
+        fontFamily: TYPE.serif,
+        fontStyle: "italic 400",
+        fontSize: "27px",
+        color: "#d7cfe8",
         align: "center",
-        wordWrap: { width: WORLD.width - 64 }
+        wordWrap: { width: WORLD.width - 96 }
       })
       .setOrigin(0.5);
 
@@ -604,20 +645,20 @@ export class FlightScene extends Phaser.Scene {
     // No dedicated hit zone: any tap outside "Share"/"Home" restarts.
     // Stops short of the safe-area inset: on a phone the last strip is the
     // home indicator's, and a button there is half-swallowed by the system.
-    const replayTop = 706;
+    const replayTop = REPLAY_TOP;
     const replayBottom = WORLD.height - SAFE_BOTTOM;
-    const replayBg = this.add
-      .rectangle(0, replayTop, WORLD.width, replayBottom - replayTop, 0x9b6bff, 0.16)
-      .setOrigin(0, 0)
-      .setStrokeStyle(2, 0x9b6bff, 0.5);
+    // THE one filled band of this screen (rule 1): violet gradient under a
+    // glowing top hairline, and a letterspaced caps word. No border, no box.
+    const replayBg = actionBand(this, replayTop, replayBottom - replayTop);
     this.replayLabel = this.add
       .text(cx, (replayTop + replayBottom) / 2, "", {
-        fontFamily: "sans-serif",
-        fontStyle: "bold",
-        fontSize: "44px",
-        color: "#f2c8ff"
+        fontFamily: TYPE.sans,
+        fontStyle: "600",
+        fontSize: "15px",
+        color: TYPE.cream
       })
       .setOrigin(0.5);
+    this.replayLabel.setLetterSpacing(15 * 0.42);
 
     // FOUR THINGS, and the way home. Everything else — best scores, history,
     // cause of death, run summary, the tier road — moved to the Scores page,
@@ -631,6 +672,7 @@ export class FlightScene extends Phaser.Scene {
     this.deathPanel = this.add
       .container(0, 0, [
         veil,
+        messageRule,
         this.messageText,
         this.deathScoreText,
         this.homeIcon,
@@ -663,19 +705,21 @@ export class FlightScene extends Phaser.Scene {
     const veil = this.add.rectangle(0, 0, WORLD.width, WORLD.height, 0x05030c, 0.7).setOrigin(0, 0);
     this.pauseTitleText = this.add
       .text(cx, WORLD.height * 0.44, "", {
-        fontFamily: "sans-serif",
-        fontStyle: "bold",
-        fontSize: "46px",
-        color: "#f5efd8"
+        fontFamily: TYPE.serif,
+        fontStyle: "400",
+        fontSize: "40px",
+        color: TYPE.cream
       })
       .setOrigin(0.5);
     this.pauseHintText = this.add
-      .text(cx, WORLD.height * 0.44 + 66, "", {
-        fontFamily: "sans-serif",
-        fontSize: "24px",
-        color: "#d9a7ff"
+      .text(cx, WORLD.height * 0.44 + 58, "", {
+        fontFamily: TYPE.sans,
+        fontStyle: "600",
+        fontSize: "11px",
+        color: TYPE.violetDim
       })
       .setOrigin(0.5);
+    this.pauseHintText.setLetterSpacing(11 * 0.28);
     this.pausePanel = this.add
       .container(0, 0, [veil, this.pauseTitleText, this.pauseHintText])
       .setDepth(31)
@@ -689,13 +733,14 @@ export class FlightScene extends Phaser.Scene {
    */
   private refreshTexts(): void {
     // The way home is an icon now: nothing to translate, nothing to fit.
-    this.replayLabel.setText(t("death.replay"));
-    fitText(this.replayLabel, WORLD.width - 48, 44);
+    // Caps recipe: uppercase + tracking (canvas has no font-variant).
+    this.replayLabel.setText(t("death.replay").toUpperCase());
+    fitText(this.replayLabel, WORLD.width - 48, 15);
 
     this.pauseTitleText.setText(t("pause.title"));
-    fitText(this.pauseTitleText, WORLD.width - 48, 46);
-    this.pauseHintText.setText(t("pause.hint"));
-    fitText(this.pauseHintText, WORLD.width - 48, 24);
+    fitText(this.pauseTitleText, WORLD.width - 48, 40);
+    this.pauseHintText.setText(t("pause.hint").toUpperCase());
+    fitText(this.pauseHintText, WORLD.width - 48, 11);
 
 
     // A tier name currently being announced changes language too.
@@ -720,7 +765,7 @@ export class FlightScene extends Phaser.Scene {
    */
   private refreshDeathTexts(previousBestTime = this.perceeTime): void {
     this.deathScoreText.setText(String(this.score));
-    fitText(this.deathScoreText, WORLD.width - 48, 128);
+    fitText(this.deathScoreText, WORLD.width - 48, 132);
 
     // ONE line, doing both jobs: what happened, and a reason to go again.
     // A single template per variant carries both — the gap used to be a
@@ -986,8 +1031,13 @@ export class FlightScene extends Phaser.Scene {
     this.sky.fillGradientStyle(top, top, bottom, bottom, 1);
     this.sky.fillRect(0, 0, WORLD.width, WORLD.height);
 
-    // Paler moon.
-    this.moon.setFillStyle(lerpColor(MOON_COLOR, MAGIC.coldMoonColor, cold), 0.9);
+    // Paler moon (the texture is white art: the tint carries the colour).
+    const moonTint = lerpColor(MOON_COLOR, MAGIC.coldMoonColor, cold);
+    this.moon.setTint(moonTint);
+    this.moonIdleGlow.setTint(moonTint);
+
+    // Treelines, mist and stars follow the same cooled sky.
+    this.scenery.setMood(top, bottom);
 
     // Sparser, cooler ambient dust.
     this.ambient.frequency = Phaser.Math.Linear(AMBIENT.frequencyCold, AMBIENT.frequencyLit, ratio);
@@ -1198,8 +1248,9 @@ export class FlightScene extends Phaser.Scene {
     label: string,
     style: Phaser.Types.GameObjects.Text.TextStyle
   ): void {
+    // Serif, like every numeral: the floating gain is a value, not a label.
     const text = this.add
-      .text(x, y, label, { fontFamily: "sans-serif", ...style })
+      .text(x, y, label, { fontFamily: TYPE.serif, fontStyle: "500", ...style })
       .setOrigin(0.5)
       .setDepth(22);
     this.floaters.push(text);
@@ -1487,6 +1538,10 @@ export class FlightScene extends Phaser.Scene {
 
     // --- Obstacles: generation + scrolling at the tier's pace.
     this.spawner.update(dt, this.effectiveDiff());
+
+    // Parallax scenery follows the same clock as the world (slow motion and
+    // pause included, since it shares this frame's dt).
+    this.scenery.update(dt, this.diffCurrent.speed);
 
     // --- Near-miss, score, death. Only a collision can kill.
     if (this.updateNearMiss()) {

@@ -21,8 +21,11 @@ export const LANG_NAMES: Record<Lang, string> = {
  * Values may contain `{name}` parameters, substituted by `t()`.
  */
 const EN = {
-  "menu.play": "Tap to play",
-  "menu.bestScore": "Best score  {score}",
+  // Home: a still serif line and a caps hint beneath it — the line no longer
+  // blinks at a player who is reading it (design decision, "Moonlight & ink").
+  "menu.hold": "Hold to fly",
+  "menu.tap": "Tap anywhere",
+  "menu.best": "Best",
 
   "settings.title": "Settings",
   "settings.language": "Language",
@@ -32,6 +35,10 @@ const EN = {
   "settings.back": "Back",
   "settings.howToPlay": "How to play",
 
+  // Captions are full serif sentences; the caps titles name the three moves.
+  "help.grazeTitle": "Graze",
+  "help.touchTitle": "Touch",
+  "help.comboTitle": "Chain",
   "help.graze": "Graze an obstacle to score",
   "help.touch": "Touch it and the run ends",
   "help.combo": "Chain grazes to multiply",
@@ -98,8 +105,9 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
   en: EN,
 
   fr: {
-    "menu.play": "Tape pour jouer",
-    "menu.bestScore": "Meilleur score  {score}",
+    "menu.hold": "Maintiens pour voler",
+    "menu.tap": "Tape n'importe où",
+    "menu.best": "Record",
 
     "settings.title": "Réglages",
     "settings.language": "Langue",
@@ -109,6 +117,9 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "settings.back": "Retour",
     "settings.howToPlay": "Comment jouer",
 
+    "help.grazeTitle": "Frôle",
+    "help.touchTitle": "Touche",
+    "help.comboTitle": "Enchaîne",
     "help.graze": "Frôle un obstacle pour marquer",
     "help.touch": "Le toucher, et la partie s'arrête",
     "help.combo": "Enchaîne les frôlements pour multiplier",
@@ -163,8 +174,9 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
   },
 
   es: {
-    "menu.play": "Toca para jugar",
-    "menu.bestScore": "Mejor puntuación  {score}",
+    "menu.hold": "Mantén pulsado para volar",
+    "menu.tap": "Toca en cualquier lugar",
+    "menu.best": "Récord",
 
     "settings.title": "Ajustes",
     "settings.language": "Idioma",
@@ -174,6 +186,9 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "settings.back": "Volver",
     "settings.howToPlay": "Cómo jugar",
 
+    "help.grazeTitle": "Roza",
+    "help.touchTitle": "Toca",
+    "help.comboTitle": "Encadena",
     "help.graze": "Roza un obstáculo para puntuar",
     "help.touch": "Si lo tocas, la partida termina",
     "help.combo": "Encadena rozaduras para multiplicar",
@@ -228,8 +243,9 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
   },
 
   it: {
-    "menu.play": "Tocca per giocare",
-    "menu.bestScore": "Miglior punteggio  {score}",
+    "menu.hold": "Tieni premuto per volare",
+    "menu.tap": "Tocca ovunque",
+    "menu.best": "Record",
 
     "settings.title": "Impostazioni",
     "settings.language": "Lingua",
@@ -239,6 +255,9 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "settings.back": "Indietro",
     "settings.howToPlay": "Come si gioca",
 
+    "help.grazeTitle": "Sfiora",
+    "help.touchTitle": "Tocca",
+    "help.comboTitle": "Concatena",
     "help.graze": "Sfiora un ostacolo per segnare",
     "help.touch": "Se lo tocchi, la partita finisce",
     "help.combo": "Concatena le sfiorate per moltiplicare",

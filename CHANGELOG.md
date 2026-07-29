@@ -9,6 +9,29 @@ This project follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+**"Moonlight & ink" — interface redesign** (`src/config.ts` `TYPE`/`BRAND`, `src/ui.ts`, `src/MenuScene.ts`, `src/FlightScene.ts`, `src/ScoresScene.ts`, `src/share.ts`, `src/rewardCues.ts`, `src/i18n.ts`, `index.html`, `src/main.ts`)
+
+Implemented from the Claude Design exploration ("Moonwick — proposed design"). The palette and every readability invariant are unchanged; what changes is the chrome: the bold system sans and the 2 px-bordered boxes are gone, replaced by type, hairlines and space.
+
+- **Two faces.** Cormorant Garamond (light, high-contrast serif) for the logo, titles and every hero numeral; Manrope as SMALL CAPS (uppercase + 0.22 em tracking — canvas has no font-variant) for labels, rows and hints. Fonts load in `index.html` and `main.ts` AWAITS them (2.5 s offline fallback) before booting Phaser, so `fitText()`/`buttonWidth()` measure real glyphs in all four languages.
+- **Five rules**, now in `TYPE` (config.ts) and `ui.ts` helpers (`capsText`, `serifText`, `hairline`, `diamondDivider`, `actionBand`): no bordered boxes — one filled band per screen for the one action; hairlines at 1 px never 2; labels caps, values serif; 28 px margins; a moon-arc motif instead of frames.
+- **Home.** Serif logo with its moon-arc; "BEST · n" caps+serif pair; concentric-ring settings icon; the blinking "Tap to play" replaced by a STILL serif line ("Hold to fly") over a caps hint ("Tap anywhere") — new keys `menu.hold`/`menu.tap` replacing `menu.play`/`menu.bestScore`; the Scores box became a full-width hairline row with a chevron.
+- **In run.** Serif light score with a dark halo; the multiplier as a small gold caps mark; the combo timer slimmed to a hairline of amber (`MAGIC.barWidth/Height` 170x5 -> 110x2 — rendering only, the gauge logic is untouched); floating gains and value tags in serif.
+- **Death.** Serif 132 px score, short hairline, serif-italic message, and Replay as THE screen's one filled band (violet gradient, glowing top hairline, letterspaced caps). Same five things, same instant tap.
+- **Scores.** ‹ BACK caps top-left; serif title over a gold diamond divider; the dots-and-arrows pager replaced by caps TABS with a gold underline (the `PAGES` model is unchanged — tabs adapt to new pages); hairline rows, caps labels, serif values, gold rationed to records; **"Recent runs" is now five bars** (the string of numbers asked to be compared; bars just are), best of the five in gold. Row rhythm 40 px — the Forest page (11 rows, the densest) must clear the share row, and the boot assertion that catches an overflow did exactly that during this change.
+- **Settings / How to play.** Hairline rows, serif language names with a gold diamond on the choice, caps titles over serif captions for the three pictograms (new keys `help.*Title`), and a single BACK band. All hit zones kept at or above the 44/48 px floors and re-verified in Spanish (longest strings).
+- **Share image** re-typeset with the same two faces.
+- No gameplay, scoring or difficulty change anywhere. `npm run build` green.
+
+**Night scenery pass** (`src/scenery.ts` new, `src/config.ts`, `src/FlightScene.ts`, `src/MenuScene.ts`)
+- A shared background module gives the cursed forest an actual forest: a seeded star field (static texture + a few genuinely twinkling stars), a textured moon (craters, limb shade, idle halo) replacing the flat cream circle, two tileable parallax treeline layers along the bottom edge, and two drifting mist bands. Everything is generated once at boot into canvas textures — no image file — drawn WHITE and coloured by tint, so tier changes and the magic cooling retint without redrawing a pixel. All constants in the new `SCENERY` block (config.ts).
+- Strictly scenery under the readability invariant: every piece sits below the darkness overlay (depth 2) and the gameplay layer, so it darkens with the sky and never touches obstacles, halos or the witch.
+- Parallax follows the same frame clock as the world (slow motion and pause included) at `treeline.parallax` fractions of the scroll speed; on the home and death screens the forest drifts at `SCENERY.menuDriftPxS` instead — a rest, not a run.
+- Stars fade out as the sky-top luminance rises (`stars.fadeLum*`): on The Moon's Eye's pale gold they would read as debris, not stars. Verified in play at tier 4.
+- The flight scene, the home screen and the death screen all use the same module, so the night never has two looks. The death screen's copy sits at its own depth (28) above the dead world.
+- Logo treatment on the home screen: the glyphs carry a soft baked halo (`BRAND.shadowColor/shadowBlur`) so the word glows even at the background glow's dimmest, plus a hairline flourish with a centre diamond under the word (`BRAND.flourish*`). Logo furniture, not interface: no text, no hit area, nothing through i18n.
+- No gameplay, scoring or difficulty change: hitbox, graze radii, tiers and generator untouched. `npm run build` green.
+
 Art direction pass: obstacles and the witch stopped being geometric placeholders.
 No gameplay, scoring or difficulty change in any of it — the hitbox, the graze
 radius, the tier parameters and the generator are untouched.

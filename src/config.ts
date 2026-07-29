@@ -8,22 +8,80 @@
 import type { Essence } from "./obstacleShapes";
 
 /**
+ * The type system — "Moonlight & ink" art direction.
+ *
+ * TWO FACES, TWO JOBS. A light high-contrast serif carries the logo, the
+ * titles and every hero numeral; a geometric sans set as SMALL CAPS (uppercase
+ * + wide tracking) carries labels, rows and hints. No bold system sans
+ * anywhere: where the old UI shouted, this one whispers.
+ *
+ * FIVE RULES the interface obeys (see CLAUDE.md):
+ *   1. no bordered boxes — one filled band per screen, for the one action;
+ *   2. hairlines at 1 px, never 2;
+ *   3. labels are small caps, values are serif;
+ *   4. 28 px margins, 8 px rhythm;
+ *   5. a moon-arc motif instead of frames.
+ *
+ * The fonts load in index.html and main.ts AWAITS them before booting Phaser,
+ * so fitText() and buttonWidth() always measure the real glyphs.
+ */
+export const TYPE = {
+  serif: '"Cormorant Garamond", Georgia, serif',
+  sans: 'Manrope, "Helvetica Neue", Helvetica, sans-serif',
+  /** Small-caps tracking, as a fraction of the font size (0.22em). */
+  trackEm: 0.22,
+
+  // Ink and paper of the night: cream for what matters, muted violet-grey for
+  // labels, gold RATIONED to records, rewards and Full Moon.
+  cream: "#f4eee0",
+  gold: "#ffd9a0",
+  goldWarm: "#ffe9a8",
+  label: "#8d86a8",
+  labelBright: "#c9c0e0",
+  violetDim: "rgba(160,143,208,0.75)",
+
+  // Hairlines: 1 px, violet, low alpha. The three levels used by the screens.
+  hairline: 0xa08fd0,
+  hairlineAlpha: 0.14,
+  hairlineAlphaStrong: 0.3,
+  hairlineDiamond: 5,
+
+  // The one filled band per screen (Replay, Back): violet gradient, top
+  // hairline, letterspaced caps. No border.
+  bandColor: 0x9b6bff,
+  bandAlphaTop: 0.06,
+  bandAlphaBottom: 0.22,
+  bandLine: 0xd8c9ff,
+  bandLineAlpha: 0.55
+} as const;
+
+/**
  * Brand name. NEVER translated, NEVER routed through i18n: it is identical in
  * all four languages (see CLAUDE.md, brand rule).
  * Treated typographically as a logo, not as interface text.
  */
 export const BRAND = {
   name: "Moonwick",
-  fontSizePx: 60,
-  // Wide letter-spacing: this is what makes it read as a logo, not a title.
-  letterSpacing: 11,
-  color: "#f5efd8",
+  fontSizePx: 66,
+  // Serif light, wide letter-spacing: what makes it a logo, not a title.
+  letterSpacing: 10.5,
+  color: "#f4eee0",
   // Moon glow behind the word, breathing very slowly.
   glowColor: 0xffe9a8,
   glowSize: 460,
   glowAlphaMin: 0.09,
   glowAlphaMax: 0.2,
-  glowPulseMs: 4200
+  glowPulseMs: 4200,
+  // Soft halo baked into the glyphs themselves (canvas text shadow), so the
+  // word glows even where the breathing background glow is at its dimmest.
+  shadowColor: "rgba(255,233,168,0.35)",
+  shadowBlur: 26,
+  // Moon-arc under the word: the same arc as the Percée, the game's motif.
+  arcWidth: 140,
+  arcHeight: 34,
+  arcY: 262,
+  arcColor: 0xffd9a0,
+  arcAlpha: 0.35
 } as const;
 
 /** Logical size (portrait); must match the scale config in main.ts. */
@@ -351,6 +409,91 @@ export const MOON = {
 } as const;
 
 /**
+ * Background scenery — RENDERING ONLY, and strictly SCENERY in the sense of
+ * the readability invariant: every piece lives UNDER the darkness overlay, so
+ * it darkens with the sky and never competes with the obstacles, their halos
+ * or the witch. No image file: everything is generated once at boot
+ * (src/scenery.ts) into cached canvas textures, then displayed as sprites or
+ * scrolling tiles. All colours are applied as TINTS over white art, so the
+ * whole mood can follow the tier sky with no redraw.
+ */
+export const SCENERY = {
+  // Deterministic seed: the same build always produces the same night.
+  seed: 20260729,
+
+  /**
+   * Idle drift on the home and death screens, in world px/s: the forest
+   * breathes even when nothing scrolls. Well below any tier speed on purpose
+   * — the menu is a rest, not a run.
+   */
+  menuDriftPxS: 30,
+
+  /**
+   * Star field: one static texture over the top of the sky, plus a few
+   * individually twinkling stars. Stars are DISTANT scenery: they do not
+   * parallax. Their alpha fades to zero as the sky turns pale (The Moon's
+   * Eye inversion) — stars on a golden daylit sky would read as a bug.
+   */
+  stars: {
+    count: 110,
+    /** Star band: from the top edge down to this fraction of the screen. */
+    bandFraction: 0.72,
+    alpha: 0.9,
+    /** Sky-top luminance (0-1) where stars start fading, and are gone. */
+    fadeLumStart: 0.18,
+    fadeLumEnd: 0.42,
+    twinkleCount: 12,
+    twinkleMinHz: 0.15,
+    twinkleMaxHz: 0.5,
+    twinkleScale: 0.16
+  },
+
+  /**
+   * The moon's face: white disc with seeded craters and a soft limb shade,
+   * tinted by the scenes (idle cream, cooled blue-grey as magic fades).
+   * Radius matches the flat circle it replaces.
+   */
+  moon: {
+    radius: 34,
+    craterCount: 6,
+    craterMinR: 3,
+    craterMaxR: 8,
+    craterAlpha: 0.1,
+    /** Soft idle halo around the moon (the Full Moon glow is separate). */
+    idleGlowSize: 190,
+    idleGlowAlpha: 0.16
+  },
+
+  /**
+   * Distant forest: two tileable silhouette layers along the bottom edge,
+   * scrolling slower than the obstacles (parallax sells the depth). Drawn
+   * white and tinted per tier: each layer sits between the sky-bottom colour
+   * and the obstacle body colour — far is closer to the sky (atmospheric
+   * perspective), near is darker.
+   */
+  treeline: {
+    far: { height: 170, parallax: 0.08, mix: 0.45, alpha: 0.85 },
+    near: { height: 110, parallax: 0.18, mix: 0.75, alpha: 0.95 },
+    /** Tint target the sky-bottom colour is mixed towards. */
+    darkColor: 0x05030a
+  },
+
+  /**
+   * Ground mist: soft tileable bands drifting slowly, slightly lighter than
+   * the sky. They both scroll with the world (their own parallax share) and
+   * drift on their own, so they still breathe when the world stands still.
+   */
+  mist: {
+    bands: [
+      { y: 0.86, height: 90, parallax: 0.12, driftPxS: 6, alpha: 0.1 },
+      { y: 0.95, height: 70, parallax: 0.26, driftPxS: 10, alpha: 0.14 }
+    ],
+    /** Mist tint: sky-bottom mixed towards white by this fraction. */
+    lightMix: 0.5
+  }
+} as const;
+
+/**
  * Obstacle art — RENDERING ONLY. None of this touches collision, scoring or
  * difficulty: the hitbox stays the simple capsule built in obstacles.ts.
  *
@@ -528,9 +671,11 @@ export const MAGIC = {
    *   combo timer : top,    short, centred, WARM amber, pulses near zero
    *   progress    : bottom, full width,     COLD violet, still but for the dot
    */
-  barWidth: 170,
-  barHeight: 5,
-  barY: 158,
+  // "Moonlight & ink": a hairline of fire, not a widget. Narrower and thinner
+  // than before (170x5 -> 110x2) — the pulse near zero carries the urgency.
+  barWidth: 110,
+  barHeight: 2,
+  barY: 152,
   /** Warm amber: the colour of something burning down. */
   barColor: 0xffb347,
   barTrackAlpha: 0.12,

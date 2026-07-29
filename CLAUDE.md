@@ -402,6 +402,35 @@ Each silhouette is split into a **shaft** frame and a **tip** frame because they
 
 **Contrast inversion** (`MOON_EYE.enabled`, toggleable): at The Moon's Eye the sky turns pale gold and the obstacles absolute black. Inverting the background inverts what "visible" means, so the graze halo and the HUD flip to dark-on-light in the same move — otherwise both would nearly vanish, and the halo must stay perfectly readable at all times.
 
+## Art direction — "Moonlight & ink" (IMPORTANT)
+
+The interface speaks through TYPE, HAIRLINES and SPACE — never through boxes.
+Two faces, two jobs, defined once in `TYPE` (config.ts) and spoken through the
+`ui.ts` helpers (`capsText`, `serifText`, `hairline`, `diamondDivider`,
+`actionBand`); no screen may invent its own vocabulary.
+
+- **Serif** (Cormorant Garamond, light): the logo, titles, tier names and
+  EVERY hero numeral or value.
+- **Small caps** (Manrope, uppercase + 0.22 em tracking): labels, rows, hints.
+  Canvas has no font-variant — uppercase + `setLetterSpacing` IS the recipe,
+  which is why the helpers exist.
+- Fonts load in `index.html`, and `main.ts` AWAITS them before booting Phaser
+  (2.5 s fallback so offline still boots): `fitText()` and `buttonWidth()`
+  must measure real glyphs in all four languages, never a swapped fallback.
+
+**FIVE RULES, non-negotiable:**
+1. **No bordered boxes.** One filled band per screen (`actionBand`), for the
+   one action — Replay, Back. Everything else is a label on a hairline.
+2. **Hairlines at 1 px, never 2.**
+3. **Labels are small caps, values are serif.**
+4. **28 px margins, 8 px rhythm.**
+5. **The moon-arc is the motif** (logo, the Percée) — never a frame.
+
+**Gold is rationed**: records, rewards, Full Moon, the active choice. Amber
+stays the combo timer alone. Violet is hairlines at 12–30 % alpha, no longer a
+border on everything. Touch targets keep the 44/48 px floors regardless of how
+quiet the paint is — "no box" changes what is drawn, never what is tappable.
+
 ## Roadmap
 - [x] **P1 — Skeleton**: hold/release flight, one scrolling obstacle, 60 fps.
 - [x] **P2 — Procedural**: varied obstacle generation, playable spacing, constant scroll.
