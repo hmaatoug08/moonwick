@@ -66,7 +66,10 @@ class Music {
   private airBus: GainNode | null = null;
   private rhythmBus: GainNode | null = null;
   private melodyBus: GainNode | null = null;
-  private padOscs: OscillatorNode[] = [];
+  private chimeBus: GainNode | null = null;
+  /** Send into the generated-impulse reverb — the room, still zero files. */
+  private reverbSend: GainNode | null = null;
+  private padVoices: { osc: OscillatorNode; mult: number }[] = [];
   private airNoise: AudioBuffer | null = null;
 
   private mode: MusicMode = "silent";
@@ -208,7 +211,7 @@ class Music {
 
       if (this.rhythmPattern[inBar]) {
         const root = MUSIC.tierRootHz[this.tierIndex] ?? MUSIC.tierRootHz[0];
-        this.pluck(
+        this.thump(
           (root / 2) * Math.pow(2, MUSIC.rhythmOctave),
           MUSIC.rhythmDecayS,
           rhythmBus,
@@ -267,12 +270,19 @@ class Music {
     if (now >= this.nextChimeAt) {
       const root = MUSIC.tierRootHz[0];
       const semis = MUSIC.scale[Math.floor(Math.random() * MUSIC.scale.length)];
-      this.pluck(root * Math.pow(2, 3 + semis / 12), MUSIC.chimeDecayS, this.master, now, MUSIC.chimeGain);
+      const bus = this.chimeBus ?? this.master;
+      this.pluck(root * Math.pow(2, 3 + semis / 12), MUSIC.chimeDecayS, bus, now, MUSIC.chimeGain);
       this.nextChimeAt = 0;
     }
   }
 
-  /** One soft sine pluck into a bus, at an exact scheduled time. */
+  /**
+   * One pluck into a bus, at an exact scheduled time. Three things separate
+   * it from a bare sine: an octave partial that decays faster than the
+   * fundamental, a breath of noise at note-on (what makes a pluck read as a
+   * PHYSICAL event), and a start a hair sharp settling onto the pitch — a
+   * plucked string does exactly that.
+   */
   private pluck(
     freq: number,
     decayS: number,
@@ -282,12 +292,52 @@ class Music {
   ): void {
     const ctx = this.ctx;
     if (!ctx) return;
+
+    for (const [ratio, share, decayShare] of [
+      [1, 1, 1],
+      [2, MUSIC.pluckPartialGain, 0.45]
+    ] as const) {
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq * ratio * (1 + MUSIC.pluckPitchSettle), at);
+      osc.frequency.exponentialRampToValueAtTime(freq * ratio, at + 0.02);
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0.0001, at);
+      env.gain.exponentialRampToValueAtTime(gain * share, at + 0.015);
+      env.gain.exponentialRampToValueAtTime(0.0001, at + decayS * decayShare);
+      osc.connect(env).connect(bus);
+      osc.start(at);
+      osc.stop(at + decayS + 0.05);
+    }
+
+    // The breath: a few milliseconds of bandpassed noise around the note.
+    const breath = ctx.createBufferSource();
+    breath.buffer = this.ensureAirNoise(ctx);
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = freq * 2;
+    bp.Q.value = 1.2;
+    const benv = ctx.createGain();
+    benv.gain.setValueAtTime(gain * MUSIC.pluckNoiseGain, at);
+    benv.gain.exponentialRampToValueAtTime(0.0001, at + 0.05);
+    breath.connect(bp).connect(benv).connect(bus);
+    breath.start(at, Math.random() * 1.5, 0.08);
+  }
+
+  /**
+   * The rhythm's voice: a soft drum skin, not a note — the pitch falls from
+   * `thumpPitchDrop` down onto the root over the first 40 ms.
+   */
+  private thump(freq: number, decayS: number, bus: AudioNode, at: number): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
     const osc = ctx.createOscillator();
     osc.type = "sine";
-    osc.frequency.value = freq;
+    osc.frequency.setValueAtTime(freq * MUSIC.thumpPitchDrop, at);
+    osc.frequency.exponentialRampToValueAtTime(freq, at + 0.04);
     const env = ctx.createGain();
     env.gain.setValueAtTime(0.0001, at);
-    env.gain.exponentialRampToValueAtTime(gain, at + 0.015);
+    env.gain.exponentialRampToValueAtTime(1, at + 0.008);
     env.gain.exponentialRampToValueAtTime(0.0001, at + decayS);
     osc.connect(env).connect(bus);
     osc.start(at);
@@ -299,10 +349,33 @@ class Music {
     const ctx = this.ctx;
     if (!ctx) return;
     const root = MUSIC.tierRootHz[this.tierIndex] ?? MUSIC.tierRootHz[0];
-    const freqs = [root / 2, root / 2, (root / 2) * 1.5, (root / 2) * 1.5];
-    this.padOscs.forEach((osc, i) => {
-      osc.frequency.setTargetAtTime(freqs[i % freqs.length], ctx.currentTime, MUSIC.rootGlideS);
-    });
+    for (const voice of this.padVoices) {
+      voice.osc.frequency.setTargetAtTime(root * voice.mult, ctx.currentTime, MUSIC.rootGlideS);
+    }
+  }
+
+  /**
+   * The reverb's impulse response, generated: stereo noise under an
+   * exponential decay, low-passed harder as the tail ages so the room
+   * darkens the way real rooms do. A few hundred KB of samples computed
+   * once at boot — never a file.
+   */
+  private makeImpulse(ctx: AudioContext): AudioBuffer {
+    const length = Math.floor(ctx.sampleRate * MUSIC.reverbSeconds);
+    const impulse = ctx.createBuffer(2, length, ctx.sampleRate);
+    for (let channel = 0; channel < 2; channel++) {
+      const data = impulse.getChannelData(channel);
+      let last = 0;
+      for (let i = 0; i < length; i++) {
+        const t = i / length;
+        const decay = Math.pow(1 - t, MUSIC.reverbDecay);
+        // One-pole lowpass whose smoothing grows with the tail's age.
+        const smooth = 0.6 + 0.39 * t;
+        last = last * smooth + (Math.random() * 2 - 1) * (1 - smooth);
+        data[i] = last * decay;
+      }
+    }
+    return impulse;
   }
 
   /** Two seconds of soft noise, looped as the night-air layer. */
@@ -343,21 +416,32 @@ class Music {
     this.filter.connect(this.master);
 
     // The pad: root an octave down + fifth, each doubled and detuned a hair
-    // apart so the pair beats slowly — the "alive" in the ambience.
+    // apart so the pair beats slowly — the "alive" in the ambience. A third
+    // pair sits further out and quieter (padWideCents): width, not chorus.
     const padGain = ctx.createGain();
     padGain.gain.value = MUSIC.padGain;
     padGain.connect(this.filter);
+    const padWide = ctx.createGain();
+    padWide.gain.value = MUSIC.padGain * MUSIC.padWideGain;
+    padWide.connect(this.filter);
     const root = MUSIC.tierRootHz[this.tierIndex];
-    const freqs = [root / 2, root / 2, (root / 2) * 1.5, (root / 2) * 1.5];
-    freqs.forEach((freq, i) => {
+    const voices: { mult: number; cents: number; wide: boolean }[] = [
+      { mult: 0.5, cents: -MUSIC.padDetuneCents, wide: false },
+      { mult: 0.5, cents: MUSIC.padDetuneCents, wide: false },
+      { mult: 0.75, cents: -MUSIC.padDetuneCents, wide: false },
+      { mult: 0.75, cents: MUSIC.padDetuneCents, wide: false },
+      { mult: 0.5, cents: MUSIC.padWideCents, wide: true },
+      { mult: 0.75, cents: -MUSIC.padWideCents, wide: true }
+    ];
+    for (const spec of voices) {
       const osc = ctx.createOscillator();
       osc.type = "triangle";
-      osc.frequency.value = freq;
-      osc.detune.value = i % 2 === 0 ? -MUSIC.padDetuneCents : MUSIC.padDetuneCents;
-      osc.connect(padGain);
+      osc.frequency.value = root * spec.mult;
+      osc.detune.value = spec.cents;
+      osc.connect(spec.wide ? padWide : padGain);
       osc.start();
-      this.padOscs.push(osc);
-    });
+      this.padVoices.push({ osc, mult: spec.mult });
+    }
 
     // Breathing: a slow LFO swaying the filter cutoff.
     const lfo = ctx.createOscillator();
@@ -382,13 +466,39 @@ class Music {
     air.connect(airFilter).connect(this.airBus).connect(this.filter);
     air.start();
 
-    // Rhythm and melody buses: plucks land here, levels ramp per frame.
+    // Rhythm, melody and chime buses: plucks land here, levels ramp per frame.
     this.rhythmBus = ctx.createGain();
     this.rhythmBus.gain.value = 0;
     this.rhythmBus.connect(this.filter);
     this.melodyBus = ctx.createGain();
     this.melodyBus.gain.value = 0;
     this.melodyBus.connect(this.master);
+    // Chimes bypass the mode-gated melody bus: they belong to the rest.
+    this.chimeBus = ctx.createGain();
+    this.chimeBus.gain.value = 1;
+    this.chimeBus.connect(this.master);
+
+    // THE ROOM: a convolution reverb whose impulse response is generated —
+    // shaped noise with an exponentially decaying, progressively darkening
+    // tail. This is what separates "oscillator" from "produced": the same
+    // notes, standing in a space. Still zero files.
+    const convolver = ctx.createConvolver();
+    convolver.buffer = this.makeImpulse(ctx);
+    const reverbReturn = ctx.createGain();
+    reverbReturn.gain.value = MUSIC.reverbReturn;
+    convolver.connect(reverbReturn).connect(this.master);
+    this.reverbSend = ctx.createGain();
+    this.reverbSend.gain.value = 1;
+    this.reverbSend.connect(convolver);
+    // The bed sits mostly dry; plucks and chimes ride the room openly.
+    const bedSend = ctx.createGain();
+    bedSend.gain.value = MUSIC.reverbBedSend;
+    this.filter.connect(bedSend).connect(this.reverbSend);
+    const pluckSend = ctx.createGain();
+    pluckSend.gain.value = MUSIC.reverbPluckSend;
+    this.melodyBus.connect(pluckSend);
+    this.chimeBus.connect(pluckSend);
+    pluckSend.connect(this.reverbSend);
 
     // Complete silence when the tab loses focus or hides — consistent with
     // the game's automatic pause. Only the MUSIC master ducks: the context is
