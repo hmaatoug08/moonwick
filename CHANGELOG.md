@@ -9,6 +9,37 @@ This project follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+**CLAUDE.md split in two: rules here, reasoning in DESIGN.md** (`CLAUDE.md`, `DESIGN.md` new, `CHANGELOG.md`)
+
+Documentation only — no source file was touched and no gameplay, scoring or
+difficulty value changed. CLAUDE.md had grown to 495 lines and is re-read at the
+start of every session, so the rules that prevent regressions were sitting in
+the middle of the history of how each decision was reached. The split is by one
+criterion: **if removing a sentence could cause a regression it stays in
+CLAUDE.md; if it only explains why a decision was taken or how something is
+implemented it moves to DESIGN.md.**
+
+- **`DESIGN.md` (new, 378 lines)** takes the long reasoning: the difficulty-rebalance story, the full rationale for "Communicating the reward", La Percée's positioning-by-time, the witch and obstacle implementation notes, the adaptive easing, the death log and the combo-timer/progress-thread comparison table.
+- **`CLAUDE.md` (495 -> 213 lines)** keeps Vision, Stack, Development rules, the factual game rules, Roadmap, Decisions, Internationalisation, the persistence table, the accessibility floor, and every hard invariant — readability invariant, anti-concatenation rule, the death screen's five things, hitbox at the bust, "the visual contains the hitbox", `SAFE_BOTTOM`, `REPLAY_CLEARANCE`.
+- Each moved section leaves the rule in one sentence plus a `-> DESIGN.md, "<section>"` pointer. 16 pointers, 11 distinct targets, all verified to resolve to a real heading.
+- **New development rule 9**: `CLAUDE.md` carries the rules and the invariants, `DESIGN.md` carries the reasoning; a new design decision goes in `DESIGN.md` and only the constraint it produces comes up into `CLAUDE.md`.
+- Two entries added to "Decisions (do not revert)" that were previously only implicit in the prose: grazing structurally compulsory -> abandoned, and the tutorial "GRAZE" band -> abandoned. Both now point at their DESIGN.md section.
+- **Nothing was dropped**, and that was checked rather than assumed: all 194 backticked identifiers, all 38 numeric facts and all 55 ALLCAPS invariant markers of the old file appear in the new pair, and of 295 sentence-level units only 18 are not present verbatim — 4 reformattings, 6 rewordings, and 8 that are the deliberate corrections from the documentation consistency pass below (the stale 10 px radius, "four things", the old P6 wording).
+- Missed the 180-line aim for CLAUDE.md by 33. The sections that must stay verbatim (game rules, roadmap, decisions, i18n, persistence table, accessibility, vision, stack, development rules) are 147 lines on their own, which leaves 33 for eleven invariant sections; getting under 180 would have meant deleting invariants rather than relocating prose, so the content won.
+
+**Documentation consistency pass** (`CLAUDE.md`, `CHANGELOG.md`)
+
+Documentation only — no source file was touched, and no gameplay, scoring or
+difficulty value changed. Four places had kept describing an earlier state of
+the game, which matters because CLAUDE.md is the authoritative reference the
+next session reads before touching anything.
+
+- **Lethal radius aligned on `NEAR_MISS.deathRadius` = 8** (config.ts is the source of truth; the value has been 8 since the difficulty rebalance, when it went 10 -> 8 for perceived generosity). "The witch" still said "the 10 px lethal circle" and "the player aims a 10 px hitbox"; "Obstacle rendering" still said `deathRadius` (10) "unchanged". The "Death" and "Difficulty balance" sections already read 8 and were left alone — the latter's "Hitbox 8 px (was 10)" is history, not a stale value.
+- **Graze ring lower bound corrected**: "a ring 10 < d <= 38 px" -> "8 < d <= 38 px", with a line saying the bound *is* `deathRadius`, so a future hitbox change is understood to move the ring's inner edge with it rather than opening a dead band between the two.
+- **Death screen count uniform at five.** The Scores page section still referred to the screen being "cut back to four things" while the reference section is titled "FIVE THINGS" — the fifth (the way home) was added afterwards and that one sentence was missed.
+- **Roadmap P6 rewritten** to describe the death screen as it is (score, one contextual line, Replay band, frozen progress thread, way home) instead of the enriched version — tier, best combo of the run, "New record!" — that was removed when the screen was slimmed. The share image entry now says the button lives on the Scores page.
+- **Changelog note added** where the score history is described as a bar chart on the death screen, pointing at its migration to the Scores page. The original entry is left intact: it records what shipped that session, and the correction belongs next to it rather than in place of it.
+
 **"Moonlight & ink" — interface redesign** (`src/config.ts` `TYPE`/`BRAND`, `src/ui.ts`, `src/MenuScene.ts`, `src/FlightScene.ts`, `src/ScoresScene.ts`, `src/share.ts`, `src/rewardCues.ts`, `src/i18n.ts`, `index.html`, `src/main.ts`)
 
 Implemented from the Claude Design exploration ("Moonwick — proposed design"). The palette and every readability invariant are unchanged; what changes is the chrome: the bold system sans and the 2 px-bordered boxes are gone, replaced by type, hairlines and space.
@@ -70,7 +101,7 @@ radius, the tier parameters and the generator are untouched.
 - Adaptive easing: after 3 consecutive deaths under 12 s the next run quietly gets +15% gap and -10% speed, lifted mid-run once the player passes 20 s. Totally invisible — no message, no icon — and disableable with `MERCY.enabled`. The trigger is derived from the death log rather than stored, so it cannot drift out of sync.
 
 **Death screen**
-- Score history: the last five scores are kept in `moonwick:history` and drawn as a mini bar chart, oldest on the left, with the best of the five in gold.
+- Score history: the last five scores are kept in `moonwick:history` and drawn as a mini bar chart, oldest on the left, with the best of the five in gold. *(Superseded: the chart left the death screen when that screen was cut back to five things; the history now lives on the Scores page, newest first.)*
 - Contextual game-over message, picked from five situations (new record, near record, big combo, early death, default) with two to three random variants each, written out in full per language — never assembled from fragments.
 - "How to play" page reachable from the settings, with three vector pictograms. It is only ever opened on purpose; nothing shows it automatically.
 - `DEBUG_RESET_TUTORIAL` to replay the first-run graze hint without wiping scores, settings or history.
