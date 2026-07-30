@@ -9,6 +9,16 @@ This project follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+**The impact beat — death legibility** (`DEATH_FX` in `src/config.ts`, `src/FlightScene.ts`, `src/obstacles.ts`, `CLAUDE.md`, `DESIGN.md`)
+
+The death screen used to replace the world on the same frame the collision landed, hiding the answer to "what happened?" at the exact moment it was asked. Now the frozen world holds for `holdMs` (420 ms) before the rest screen appears:
+
+- a **cold spark at the precise contact point** — new `Obstacle.contactPoint()`, the closest point on the same collision shapes `distanceTo` reads, so the spark can never appear where the collision did not happen;
+- the **killer's moon-rim flashes bright** for the whole beat: of the trees on screen, THIS one ended the run;
+- the **witch recoils off the contact** (12 px, position only — the hitbox is dead).
+
+The spark is violet-white, never gold — gold is the reward colour and a death must not glitter. **The hold delays pixels, never input**: `onPointerDown` reads `dead`, not visibility, so the replay tap works from the first frame exactly as before; a mid-beat tap restarts instantly and `resetRun` cancels the pending reveal. The CLAUDE.md death rule was amended precisely: what must be synchronous is the input and the death-screen content, and both still are. Verified live: panel hidden during the hold, reveal timer at 420 ms, rim tinted, impact at the contact point; reveal confirmed firing after the hold. No scoring or difficulty change.
+
 **The perfect graze + the first three trees** (`GRAZE_TIERS`/`ONBOARDING` in `src/config.ts`, `src/FlightScene.ts`, `src/obstacles.ts`, `src/sfx.ts`, `CLAUDE.md`, `DESIGN.md`)
 
 Two changes to the first sixty seconds, both deepening what exists rather than adding a system.

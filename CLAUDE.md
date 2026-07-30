@@ -34,7 +34,8 @@ Hold = climb, release = descend. Gentle gravity, clamped speed.
 **Only by contact with an obstacle.** There is no other source of death in the game.
 - Lethal hitbox: an 8 px radius circle centred on the witch's TORSO — not on her drawing's bounding box — deliberately smaller than the visual (perceived generosity). Hat, cape and broom are never lethal. See "The witch".
 - Death screen: five things only — see "The death screen". Restart < 300 ms. The replay tap must never be read as a flight input.
-- **Nothing on the death screen may delay replaying.** The tap is live on the very first frame: no delay guard, no timer, no mandatory animation. Everything is drawn synchronously in `die()`.
+- **Nothing on the death screen may delay replaying.** The tap is live on the very first frame: no delay guard, no mandatory animation. All death-screen content is drawn synchronously in `die()`; the ONLY thing deferred is the rest screen's reveal, behind the impact beat.
+- **The impact beat** (`DEATH_FX`): before the rest screen appears, the frozen world holds `holdMs` (420) showing WHAT killed her — a cold spark at the exact contact point (`Obstacle.contactPoint`, same shapes as the collision), the killer's moon-rim flashing bright, the witch recoiling off it. **The hold delays pixels, never input**: `onPointerDown` reads `dead`, not visibility, and a mid-beat tap restarts instantly (`resetRun` cancels the pending reveal — mandatory, or the rest screen would drop onto the new run). The spark is cold violet-white, never gold: an ending, not a reward. -> DESIGN.md, "The impact beat".
 
 ### The death screen's one line
 It is the only prose on that screen, so a single sentence does **both jobs at once**: it says what happened (the gap to the record, the combo, the tier) and it gives a reason to go again. Two short lines at most.
