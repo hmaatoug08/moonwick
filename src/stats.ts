@@ -50,6 +50,11 @@ export type LifetimeStats = {
   closestGraze: number;
   /** Most grazes ever landed inside a one-second window. */
   bestGrazesPerSecond: number;
+
+  /** Runs that flew past their own record (a Percée crossing). */
+  perceesCrossed: number;
+  /** Daily Moon attempts flown, all days added up. */
+  dailiesFlown: number;
 };
 
 /** What a finished run contributes. Assembled by the scene, applied here. */
@@ -68,6 +73,10 @@ export type RunStats = {
   fullMoonTime: number;
   closestGraze: number;
   bestGrazesPerSecond: number;
+  /** True when this run crossed the Percée (only possible with a record). */
+  crossedPercee: boolean;
+  /** True when this run was a Daily Moon attempt. */
+  dailyFlight: boolean;
 };
 
 function emptyTier(): TierStats {
@@ -93,7 +102,9 @@ export function emptyLifetimeStats(): LifetimeStats {
     fullMoons: 0,
     fullMoonTime: 0,
     closestGraze: Infinity,
-    bestGrazesPerSecond: 0
+    bestGrazesPerSecond: 0,
+    perceesCrossed: 0,
+    dailiesFlown: 0
   };
 }
 
@@ -131,6 +142,8 @@ export function loadLifetimeStats(): LifetimeStats {
   base.fullMoons = num(src.fullMoons, 0);
   base.fullMoonTime = num(src.fullMoonTime, 0);
   base.bestGrazesPerSecond = num(src.bestGrazesPerSecond, 0);
+  base.perceesCrossed = num(src.perceesCrossed, 0);
+  base.dailiesFlown = num(src.dailiesFlown, 0);
   // Infinity does not survive JSON, so it comes back as null: that is the
   // legitimate "never grazed yet" state, not corruption.
   base.closestGraze = num(src.closestGraze, Infinity);
@@ -187,6 +200,8 @@ export function recordRunStats(run: RunStats): LifetimeStats {
   stats.fullMoonTime += run.fullMoonTime;
   stats.closestGraze = Math.min(stats.closestGraze, run.closestGraze);
   stats.bestGrazesPerSecond = Math.max(stats.bestGrazesPerSecond, run.bestGrazesPerSecond);
+  if (run.crossedPercee) stats.perceesCrossed += 1;
+  if (run.dailyFlight) stats.dailiesFlown += 1;
 
   save(stats);
   return stats;
@@ -213,6 +228,7 @@ export function describeLifetimeStats(stats: LifetimeStats = loadLifetimeStats()
     `full moons ${stats.fullMoons}   in full moon ${seconds(stats.fullMoonTime)}`,
     `closest graze ${Number.isFinite(stats.closestGraze) ? stats.closestGraze.toFixed(1) + "px" : "-"}`,
     `best grazes/s ${stats.bestGrazesPerSecond}`,
+    `percees crossed ${stats.perceesCrossed}   dailies flown ${stats.dailiesFlown}`,
     "by essence: " + ESSENCES.map((e) => `${e} ${stats.grazesByEssence[e]}`).join("  "),
     "by tier:"
   ];

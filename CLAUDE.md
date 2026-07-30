@@ -115,6 +115,15 @@ The player's single progression hub — best scores, recent runs, lifetime stati
 - **It is PAGED**: a page is `{ titleKey, build() }` and adding one means adding an entry. A dev assertion refuses a page whose rows would reach the buttons — splitting a page is the fix, not shrinking the rows.
 - `save.ts` and `stats.ts` both track a best combo: the page reads the larger of the two so it can never show them disagreeing.
 
+### The omens (`src/omens.ts`) — the collection page
+Twelve signs the forest gives, on the Scores page's "Omens" tab, in journey order (the discovery, the forest, mastery, the moon). -> DESIGN.md, "The omens".
+- **PURELY COMMEMORATIVE.** An omen never touches gameplay, generation, scoring or difficulty — no modifier, no unlock-gated content, ever. The forest never changes because of what stands on this page.
+- **DERIVED, NEVER STORED.** Lit-or-not is a pure predicate over the lifetime stats (plus `save.ts`'s best combo), recomputed at every page open — no unlock key, no drift, and a veteran's past runs light their omens retroactively. A deed worth a new omen is paid for with a new `LifetimeStats` field (versioned, tolerant), never a stored unlock flag. The one persisted key, `moonwick:omensSeen`, records only which reveals the page has already shown — presentation state; losing it costs one repeated shimmer.
+- **No announcement during play or on the death screen.** NO WORDS DURING PLAY holds, and the death screen stays five things: omens are discovered on the Scores page, on purpose. The reveal there is a one-time fade-in with the name in gold for that visit — nothing anywhere else, no popup, no badge.
+- **A locked omen is its glyph dimmed (`OMENS.dimAlpha`), with NO name.** The glyph is the riddle and the name is part of the reward; no unlock condition is ever written in prose, in any language. Names are i18n keys (`omen.*`) like any interface string.
+- **Glyphs are drawn procedurally** in the interface-icon vocabulary (dark body lifted off black, silver-violet light on the `MOON_ON_RIGHT` side) — no image file. Thresholds that exist only for the collection live in `OMENS` (config.ts); thresholds that are already gameplay constants are read where they live (`GRAZE_TIERS.needleBand` IS the needle omen's band, never duplicated).
+- Dev assertions: omen ids are unique, and the grid stays above the share row under the same limit as the row pages.
+
 ### The progress thread, bottom edge
 A hairline across the full width, ticks at the tier boundaries, a lit notch at the record, one moving point of light. No text, no numbers, no opaque background — scenery, not a HUD. -> DESIGN.md, "The progress thread".
 - **It is the exact opposite of the combo timer on every axis** (bottom vs top, hairline vs bar, cold violet vs warm amber, still vs pulsing, "going forward" vs "running out"). They mean opposite things and must never be confused.
@@ -241,6 +250,7 @@ Every key is prefixed `moonwick:` and handled in `src/save.ts` — never touch `
 | `moonwick:lang` | `"en"` / `"fr"` / `"es"` / `"it"` — explicit choice in the settings, wins permanently over `navigator.language` |
 | `moonwick:history` | JSON array of the last `HISTORY.size` scores, oldest first. Malformed or hand-edited content degrades to an empty list, never throws |
 | `moonwick:deaths` | JSON array of the last `DEATHS.size` (50) deaths, oldest first: `{ t, tier, cause, grazes }`. Tuning source of truth, and what `MERCY` is derived from. Individual malformed entries are dropped rather than poisoning the list |
+| `moonwick:omensSeen` | JSON array of omen ids the Scores page has already revealed. Presentation state ONLY — unlock state is always derived from the stats (see "The omens"). Malformed content degrades to "nothing seen yet" |
 | `moonwick:stats` | Versioned lifetime statistics (`version: 1`), written once per run at death. Missing fields degrade to defaults rather than wiping the object. See "Lifetime statistics" |
 
 ## The Daily Moon — one shared forest a day

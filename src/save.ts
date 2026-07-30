@@ -20,6 +20,9 @@ import { DEATHS, DEBUG_RESET_TUTORIAL, HISTORY, MERCY } from "./config";
  *                          first: { t: seconds survived, tier, cause, grazes }
  *                          — the tuning source of truth, and what the adaptive
  *                          easing is derived from
+ *   moonwick:omensSeen     JSON array of omen ids the Scores page has already
+ *                          revealed — presentation state only, unlock state
+ *                          is always derived from the stats (src/omens.ts)
  *
  * Legacy `sorciere:` keys are migrated automatically (see below).
  */

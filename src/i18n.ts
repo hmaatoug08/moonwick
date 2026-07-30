@@ -89,6 +89,22 @@ const EN = {
   "essence.bramble": "Brambles",
   "essence.denseStand": "Dense stand",
 
+  // The omens (see src/omens.ts). A name is the ONLY prose an omen ever gets
+  // — no description, no unlock condition — and it only shows once lit.
+  "scores.omens": "Omens",
+  "omen.firstSpark": "The first spark",
+  "omen.hundredSparks": "A hundred sparks",
+  "omen.chain": "The chain",
+  "omen.brambles": "Into the brambles",
+  "omen.wall": "Through the Wall",
+  "omen.eye": "Under the Eye",
+  "omen.needle": "The needle",
+  "omen.flurry": "The flurry",
+  "omen.longNight": "The long night",
+  "omen.fullMoon": "Full Moon",
+  "omen.percee": "The Breakthrough",
+  "omen.daily": "The day's moon",
+
   "pause.title": "Paused",
   "pause.hint": "Tap to resume",
 
@@ -168,6 +184,20 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "essence.bramble": "Ronces",
     "essence.denseStand": "Futaie dense",
 
+    "scores.omens": "Présages",
+    "omen.firstSpark": "La première étincelle",
+    "omen.hundredSparks": "Cent étincelles",
+    "omen.chain": "La chaîne",
+    "omen.brambles": "Au cœur des ronces",
+    "omen.wall": "Au-delà du Mur",
+    "omen.eye": "Sous l'Œil",
+    "omen.needle": "L'aiguille",
+    "omen.flurry": "La rafale",
+    "omen.longNight": "La longue nuit",
+    "omen.fullMoon": "Pleine Lune",
+    "omen.percee": "La Percée",
+    "omen.daily": "La lune du jour",
+
     "pause.title": "En pause",
     "pause.hint": "Tape pour reprendre",
 
@@ -240,6 +270,20 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "essence.bramble": "Zarzas",
     "essence.denseStand": "Bosque denso",
 
+    "scores.omens": "Presagios",
+    "omen.firstSpark": "La primera chispa",
+    "omen.hundredSparks": "Cien chispas",
+    "omen.chain": "La cadena",
+    "omen.brambles": "Entre las zarzas",
+    "omen.wall": "Más allá del Muro",
+    "omen.eye": "Bajo el Ojo",
+    "omen.needle": "La aguja",
+    "omen.flurry": "La ráfaga",
+    "omen.longNight": "La larga noche",
+    "omen.fullMoon": "Luna Llena",
+    "omen.percee": "La Brecha",
+    "omen.daily": "La luna del día",
+
     "pause.title": "En pausa",
     "pause.hint": "Toca para continuar",
 
@@ -311,6 +355,20 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "essence.gnarled": "Tronchi nodosi",
     "essence.bramble": "Rovi",
     "essence.denseStand": "Bosco fitto",
+
+    "scores.omens": "Presagi",
+    "omen.firstSpark": "La prima scintilla",
+    "omen.hundredSparks": "Cento scintille",
+    "omen.chain": "La catena",
+    "omen.brambles": "Tra i rovi",
+    "omen.wall": "Oltre il Muro",
+    "omen.eye": "Sotto l'Occhio",
+    "omen.needle": "L'ago",
+    "omen.flurry": "La raffica",
+    "omen.longNight": "La lunga notte",
+    "omen.fullMoon": "Luna Piena",
+    "omen.percee": "Il Varco",
+    "omen.daily": "La luna del giorno",
 
     "pause.title": "In pausa",
     "pause.hint": "Tocca per riprendere",
