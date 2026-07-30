@@ -61,6 +61,16 @@ The last `HISTORY.size` (5) scores are kept in `moonwick:history` and shown on t
 - At 0: `combo = 0`, multiplier x1, **the run continues**. The timer is not a health bar.
 - The screen darkening as the timer drops is **pure visual feedback**, with no mechanical effect.
 
+### The Eclipse — the state above Full Moon (`ECLIPSE`, config.ts)
+HOLDING the cap for `ECLIPSE.holdSeconds` (6 s of continuous Full Moon — timed, not counted in grazes; the fuse resets the instant the multiplier leaves x5) veils the moon: a shadow disc slides over the face leaving a warm corona, the golden veil gives way to deep indigo, the witch and her trail lift to hot white-gold, a shimmer layer joins the music. Entering and leaving are fades, never cuts. -> DESIGN.md, "The Eclipse".
+- **RENDERING + MUSIC + RECORD ONLY. The multiplier stays x5 and no score changes.** Adding pay above the cap is a regression, not a feature (same charter as the omens and La Percée). One mistake still kills: the Eclipse is never a shield.
+- **It falls with the combo, whole** — timer at 0 or death, never partially. The combo timer stays the only thing that ends it, and it is still not a health bar. A dev assertion keeps `holdSeconds > 0`: the Eclipse is strictly ABOVE Full Moon, never a synonym for reaching it.
+- **Wordless during play.** No announcement; the two allowed non-numeric strings (tier name, `percee`) stay exactly two. The name appears only on the Scores page (`scores.eclipses`).
+- **The eclipse veil only touches background and scenery** — drawn at the darkness overlay's depth, under obstacles, halos, thread and witch. It stacks with the combo-loss darkness; a dev assertion caps `ECLIPSE.veilAlpha + MAGIC.darkAlphaEmpty` at 0.8 so the scenery never reaches true black.
+- **The halo floor holds under the veil**: the palette assertion also composites every tier sky (both gradient ends, lit and cooled) under the Eclipse veil and refuses anything below `HALO_CONTRAST_MIN` — same floor as the palettes themselves.
+- **Nothing in generation, difficulty, MERCY or the daily reads the eclipse flag.** A daily flight can eclipse; the course is untouched.
+- Recorded in the lifetime stats (`eclipses`, `eclipseTime`) at the single write-at-death, tolerant-loader rule as always.
+
 ### Score
 - Graze: **10 x multiplier**. Shown large at the graze position.
 - **Graded by closeness** (`GRAZE_TIERS`, judged on the pass's closest surface distance): under `closeBand` (16 px) the graze pays **15 x multiplier** with a gold-violet burst and a sharper chime; under `needleBand` (11 px) the needle-thread flash joins in. **NO WORDS** — the tiers read on feel, the floating gain stays numeric. Bands nest inside the slow-motion threshold: 11 < 16 < 18 < 38. -> DESIGN.md, "The perfect graze".

@@ -16,6 +16,9 @@ import { audioContext } from "./sfx";
  *   RHYTHM   — soft low pulses on an eighth-note grid, entering from combo
  *              `MUSIC.rhythmEnterCombo`; density follows the multiplier.
  *   MELODY   — Full Moon only: a seeded walk over the tier's scale.
+ *   SHIMMER  — Eclipse only: a standing high pair (octave + twelfth over the
+ *              pad's root) fading in over everything else, while the melody
+ *              lifts one octave. The rarest state gets the thinnest voice.
  *
  * NON-REPETITIVE BY CONSTRUCTION: rhythm and melody are drawn per bar from a
  * scale and a per-run seed (reseeded at every restart), so two runs never
@@ -45,6 +48,8 @@ export type MusicState = {
   /** True during the Percée slow-motion crossing: the music steps aside. */
   crossing?: boolean;
   fullMoon?: boolean;
+  /** True in the Eclipse: the shimmer enters and the melody lifts an octave. */
+  eclipse?: boolean;
   /** Index into TIERS: picks the pad's root note. */
   tierIndex?: number;
 };
@@ -56,6 +61,7 @@ class Music {
   private airBus: GainNode | null = null;
   private rhythmBus: GainNode | null = null;
   private melodyBus: GainNode | null = null;
+  private shimmerBus: GainNode | null = null;
   private chimeBus: GainNode | null = null;
   /** Send into the generated-impulse reverb — the room, still zero files. */
   private reverbSend: GainNode | null = null;
@@ -65,12 +71,15 @@ class Music {
   private mode: MusicMode = "silent";
   private ducked = false;
   private tierIndex = 0;
+  /** Read by the grid when scheduling melody plucks: the octave lift. */
+  private eclipse = false;
 
   // JS-side smoothed values, written to the params every update.
   private level = 0;
   private airLevel = 0;
   private rhythmLevel = 0;
   private melodyLevel = 0;
+  private shimmerLevel = 0;
   private filterHz = MUSIC.filterMinHz;
 
   // The grid: one clock for rhythm and melody, patterns drawn per bar.
@@ -129,6 +138,7 @@ class Music {
     const combo = state.combo ?? 0;
     const cold = state.cold ?? 0;
     const tension = state.tension ?? 0;
+    this.eclipse = state.eclipse === true;
 
     // The pad's root follows the tier, gliding — the same 2 s changeover as
     // the sky, heard instead of seen.
@@ -152,6 +162,7 @@ class Music {
     const rhythmOn =
       this.mode === "run" && (state.comboCount ?? 0) >= MUSIC.rhythmEnterCombo ? 1 : 0;
     const melodyOn = this.mode === "run" && state.fullMoon ? 1 : 0;
+    const shimmerOn = this.mode === "run" && this.eclipse ? 1 : 0;
     const airOn =
       this.mode === "rest"
         ? MUSIC.airRestPresence
@@ -164,12 +175,14 @@ class Music {
     this.airLevel += (airOn - this.airLevel) * k;
     this.rhythmLevel += (rhythmOn - this.rhythmLevel) * k;
     this.melodyLevel += (melodyOn - this.melodyLevel) * k;
+    this.shimmerLevel += (shimmerOn - this.shimmerLevel) * k;
     this.filterHz += (targetHz - this.filterHz) * k;
 
     this.master.gain.value = this.level;
     this.airBus.gain.value = this.airLevel * MUSIC.airGain;
     this.rhythmBus.gain.value = this.rhythmLevel * MUSIC.rhythmGain;
     this.melodyBus.gain.value = this.melodyLevel * MUSIC.melodyGain;
+    if (this.shimmerBus) this.shimmerBus.gain.value = this.shimmerLevel * MUSIC.shimmerGain;
     this.filter.frequency.value = this.filterHz;
 
     this.runGrid(combo);
@@ -212,7 +225,9 @@ class Music {
       if (degree !== undefined && degree >= 0 && this.melodyLevel >= 0.002) {
         const root = MUSIC.tierRootHz[this.tierIndex] ?? MUSIC.tierRootHz[0];
         const semis = MUSIC.scale[degree % MUSIC.scale.length];
-        const freq = root * Math.pow(2, MUSIC.melodyOctave - 1 + semis / 12);
+        // The Eclipse lifts the walk an octave: the same melody, thinner air.
+        const octave = MUSIC.melodyOctave + (this.eclipse ? MUSIC.shimmerMelodyLift : 0);
+        const freq = root * Math.pow(2, octave - 1 + semis / 12);
         this.pluck(freq, MUSIC.melodyDecayS, melodyBus, this.nextStepAt);
       }
 
@@ -455,6 +470,21 @@ class Music {
     airFilter.Q.value = MUSIC.airQ;
     air.connect(airFilter).connect(this.airBus).connect(this.filter);
     air.start();
+
+    // Shimmer: the Eclipse's standing pair, octave + twelfth over the pad's
+    // root. They join padVoices so the tier glide carries them too, but land
+    // on their own bus — gain 0 until an Eclipse fades it in.
+    this.shimmerBus = ctx.createGain();
+    this.shimmerBus.gain.value = 0;
+    this.shimmerBus.connect(this.filter);
+    for (const mult of MUSIC.shimmerMults) {
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.value = root * mult;
+      osc.connect(this.shimmerBus);
+      osc.start();
+      this.padVoices.push({ osc, mult });
+    }
 
     // Rhythm, melody and chime buses: plucks land here, levels ramp per frame.
     this.rhythmBus = ctx.createGain();
