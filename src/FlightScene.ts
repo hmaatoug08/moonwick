@@ -928,6 +928,20 @@ export class FlightScene extends Phaser.Scene {
     this.percee.reset();
     this.sfx.setTension(0);
 
+    // Starting tier, resolved BEFORE anything that draws: the sky, the halo and
+    // the progress thread's polarity all read `diffCurrent`, so the tier has to
+    // exist first. Drawing the thread ahead of this line threw on every single
+    // run start (`diffCurrent.inverted` on an unassigned field) — the field is
+    // declared with `!`, so only the runtime could catch it.
+    // Pure data, no side effects: the visual side (ambient, ambiance, tier
+    // announcement) stays further down, in its original order.
+    const startTier = DEBUG_START_TIER >= 0 ? Math.min(DEBUG_START_TIER, TIERS.length - 1) : 0;
+    this.runTime = TIERS[startTier].startTime;
+    this.tierIndex = startTier;
+    this.diffCurrent = this.tierParams(startTier);
+    this.diffFrom = { ...this.diffCurrent };
+    this.transitionT = TIER_FX.transitionS;
+
     // The thread's scale is fixed here so it never slides under the dot.
     this.threadSpan = Math.max(
       PROGRESS_THREAD.minSpan,
@@ -958,15 +972,9 @@ export class FlightScene extends Phaser.Scene {
     this.pausePanel.setVisible(false);
     this.debugGfx?.clear();
 
-    // Starting tier: normal, or forced by DEBUG_START_TIER (testing without
-    // replaying 80 s). Parameters are applied at once, with no interpolation
-    // carried over from the previous run.
-    const startTier = DEBUG_START_TIER >= 0 ? Math.min(DEBUG_START_TIER, TIERS.length - 1) : 0;
-    this.runTime = TIERS[startTier].startTime;
-    this.tierIndex = startTier;
-    this.diffCurrent = this.tierParams(startTier);
-    this.diffFrom = { ...this.diffCurrent };
-    this.transitionT = TIER_FX.transitionS;
+    // The tier's parameters were resolved above, before anything drew. What is
+    // left here is the visual side of the changeover, in its original order:
+    // applied at once, with no interpolation carried over from the previous run.
     this.ambient.killAll();
     this.applyAmbiance(true);
     this.announceTier(TIERS[startTier].nameKey);

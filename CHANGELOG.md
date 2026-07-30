@@ -9,6 +9,15 @@ This project follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+**Fix: starting a run threw, so the game never left the home screen** (`src/FlightScene.ts`)
+
+Regression from the palette work, in the same session. `drawThread()` gained a read of `this.diffCurrent.inverted` (the progress thread flips polarity with the sky at The Moon's Eye), but `resetRun()` calls `drawThread()` *before* `diffCurrent` is assigned — so every attempt to start a run threw `Cannot read properties of undefined (reading 'inverted')` inside `create()`, leaving the scene stuck in CREATING with no scene active and nothing on screen.
+
+- **Fix**: the starting tier's parameters (`runTime`, `tierIndex`, `diffCurrent`, `diffFrom`, `transitionT`) are resolved at the top of `resetRun()`, before anything draws — the sky, the halo and the thread's polarity all read `diffCurrent`, so the tier has to exist first. Pure data, no side effects; the visual half (`ambient.killAll()`, `applyAmbiance(true)`, `announceTier`) stays where it was, in its original order.
+- **Why the build did not catch it**: `diffCurrent` is declared `private diffCurrent!: TierParams`, so `tsc` treats it as always present. Only the runtime could see it.
+- **Why I did not catch it**: I verified the palette maths exhaustively and that the menu boots, but never started a run after the change. Worse, I hit the symptom twice while testing — clicks not starting a run, then a scene report of `active: []` with `diffCurrent` missing — and both times attributed it to the preview pane rather than investigating.
+- Verified after the fix, from a cold load: menu -> run (scene status RUNNING, obstacles spawning, 60 fps), replay from the death screen, and all five tier boundaries including the Moon's Eye inversion (`inverted` true, thread dot on normal blending) — zero errors throughout.
+
 **A palette per tier** (`TierPalette`/`TIERS`/`MOON_EYE`/`HALO_CONTRAST_MIN` in `src/config.ts`, `src/FlightScene.ts`, `src/obstacles.ts`, `src/scenery.ts`, `src/MenuScene.ts`, `CLAUDE.md`, `DESIGN.md`)
 
 Rendering only, on the same terms as `Tier.essence`: no change to spacing, gap width, speed or difficulty, and every tier's fairness assertion still passes untouched.
