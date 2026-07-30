@@ -45,6 +45,10 @@ export type LifetimeStats = {
   fullMoons: number;
   /** Seconds spent at the multiplier cap, all runs added up. */
   fullMoonTime: number;
+  /** Runs that chained past Full Moon into the Eclipse. */
+  eclipses: number;
+  /** Seconds spent inside the Eclipse, all runs added up. */
+  eclipseTime: number;
 
   /** Closest a graze ever came without dying, in px. Infinity = never grazed. */
   closestGraze: number;
@@ -71,6 +75,8 @@ export type RunStats = {
   bestCombo: number;
   reachedFullMoon: boolean;
   fullMoonTime: number;
+  reachedEclipse: boolean;
+  eclipseTime: number;
   closestGraze: number;
   bestGrazesPerSecond: number;
   /** True when this run crossed the Percée (only possible with a record). */
@@ -101,6 +107,8 @@ export function emptyLifetimeStats(): LifetimeStats {
     bestCombo: 0,
     fullMoons: 0,
     fullMoonTime: 0,
+    eclipses: 0,
+    eclipseTime: 0,
     closestGraze: Infinity,
     bestGrazesPerSecond: 0,
     perceesCrossed: 0,
@@ -141,6 +149,8 @@ export function loadLifetimeStats(): LifetimeStats {
   base.bestCombo = num(src.bestCombo, 0);
   base.fullMoons = num(src.fullMoons, 0);
   base.fullMoonTime = num(src.fullMoonTime, 0);
+  base.eclipses = num(src.eclipses, 0);
+  base.eclipseTime = num(src.eclipseTime, 0);
   base.bestGrazesPerSecond = num(src.bestGrazesPerSecond, 0);
   base.perceesCrossed = num(src.perceesCrossed, 0);
   base.dailiesFlown = num(src.dailiesFlown, 0);
@@ -198,6 +208,8 @@ export function recordRunStats(run: RunStats): LifetimeStats {
   stats.bestCombo = Math.max(stats.bestCombo, run.bestCombo);
   if (run.reachedFullMoon) stats.fullMoons += 1;
   stats.fullMoonTime += run.fullMoonTime;
+  if (run.reachedEclipse) stats.eclipses += 1;
+  stats.eclipseTime += run.eclipseTime;
   stats.closestGraze = Math.min(stats.closestGraze, run.closestGraze);
   stats.bestGrazesPerSecond = Math.max(stats.bestGrazesPerSecond, run.bestGrazesPerSecond);
   if (run.crossedPercee) stats.perceesCrossed += 1;
@@ -226,6 +238,7 @@ export function describeLifetimeStats(stats: LifetimeStats = loadLifetimeStats()
     `games ${stats.gamesPlayed}   played ${seconds(stats.totalPlayTime)}   best ${seconds(stats.bestTime)}`,
     `grazes ${stats.totalGrazes}   best combo ${stats.bestCombo}`,
     `full moons ${stats.fullMoons}   in full moon ${seconds(stats.fullMoonTime)}`,
+    `eclipses ${stats.eclipses}   in eclipse ${seconds(stats.eclipseTime)}`,
     `closest graze ${Number.isFinite(stats.closestGraze) ? stats.closestGraze.toFixed(1) + "px" : "-"}`,
     `best grazes/s ${stats.bestGrazesPerSecond}`,
     `percees crossed ${stats.perceesCrossed}   dailies flown ${stats.dailiesFlown}`,

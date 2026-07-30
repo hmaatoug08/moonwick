@@ -938,6 +938,47 @@ export const FULL_MOON = {
 } as const;
 
 /**
+ * The Eclipse — the prestige state ABOVE Full Moon (-> DESIGN.md, "The
+ * Eclipse"). Reached by HOLDING the cap: `holdSeconds` of continuous Full
+ * Moon, timed, not counted in grazes — the same feat on every tier whatever
+ * the spawn rhythm. It falls with the combo, whole, and pays NOTHING: the
+ * multiplier stays x5 and no score changes. What it grants is the state itself — the
+ * moon veiled to a corona, the witch become the light, a shimmer over the
+ * music — plus a lifetime count on the Scores page. WORDLESS during play.
+ *
+ * READABILITY: the eclipse veil only touches background and scenery (drawn at
+ * the darkness overlay's depth, under obstacles, halos, thread and witch). A
+ * darker sky RAISES halo contrast, so the invariant holds by construction;
+ * the assertion below keeps the stacked veils off true black.
+ */
+export const ECLIPSE = {
+  /** Seconds of CONTINUOUS Full Moon before the moon is veiled. The count
+   *  resets the instant the multiplier leaves the cap. */
+  holdSeconds: 6,
+  /** The shadow's slide across the moon face. */
+  enterMs: 900,
+  /** The release: the moon returns faster than it was veiled. */
+  exitMs: 420,
+  /** Horizontal start offset of the shadow disc, moon-side, in px. */
+  shadowSlidePx: 26,
+  /** The shadow: the moon's own texture in near-sky ink. */
+  shadowColor: 0x120b26,
+  shadowAlpha: 0.96,
+  /** The corona: the idle glow strengthened, warm white — reward, not death. */
+  coronaColor: 0xfff1c8,
+  coronaAlpha: 0.5,
+  coronaScale: 1.35,
+  /** Deep-indigo veil over background and scenery ONLY (normal blend). */
+  veilColor: 0x0a0618,
+  veilAlpha: 0.26,
+  /** The witch becomes the light: hot white-gold, brighter than Full Moon. */
+  witchColor: 0xfff2d0,
+  witchRim: 0xfff7e6,
+  witchAura: 0xffe9b8,
+  trailColor: 0xffedc2
+} as const;
+
+/**
  * Sounds synthesised with Web Audio, no external files (P4 rule).
  * Volume deliberately low: the game is often played muted and must never
  * startle. `masterVolume` is the only knob to touch.
@@ -961,7 +1002,12 @@ export const SFX = {
   /** Percée approach: the swoosh detunes down by this much at full tension. */
   tensionDetuneCents: -260,
   /** Close graze: the swoosh peak rises by this factor — sharper, not louder. */
-  closeSharpen: 1.3
+  closeSharpen: 1.3,
+  /** Eclipse entry: one soft low bell, two partials, long decay. Once. */
+  eclipseBellHz: 220,
+  eclipseBellPartialRatio: 1.5,
+  eclipseBellMs: 1400,
+  eclipseBellGain: 0.7
 } as const;
 
 /**
@@ -1039,6 +1085,14 @@ export const MUSIC = {
   melodyDecayS: 0.7,
   melodyOctave: 3,
   melodyDensity: 0.45,
+
+  // SHIMMER, Eclipse only: a standing high pair (octave + twelfth over the
+  // pad's root) that fades in like every other layer, and the melody lifts
+  // one octave while it holds. The rarest state gets the thinnest voice —
+  // air, not fanfare.
+  shimmerGain: 0.16,
+  shimmerMults: [4, 6],
+  shimmerMelodyLift: 1,
 
   /** Percée approach: fraction of the bed removed at the marker. The
    *  slow-motion crossing itself silences the music entirely. */
@@ -1473,6 +1527,29 @@ if (import.meta.env.DEV) {
   }
 }
 
+// --- Guard rail (dev only): the Eclipse sits STRICTLY above Full Moon.
+// It must ask for a real HOLD on top of reaching the cap, or "above Full
+// Moon" silently becomes "at Full Moon" the day someone retunes it.
+if (import.meta.env.DEV) {
+  if (ECLIPSE.holdSeconds <= 0) {
+    throw new Error(
+      `ECLIPSE.holdSeconds ${ECLIPSE.holdSeconds} must be > 0: the Eclipse ` +
+        `is the state ABOVE Full Moon — earned by holding the cap — never a ` +
+        `synonym for reaching it.`
+    );
+  }
+  // The eclipse veil stacks with the combo-loss darkness while the timer
+  // drains between grazes. Both only touch background and scenery, but the
+  // scenery must stay faintly present — the forest goes deep, never void.
+  if (ECLIPSE.veilAlpha + MAGIC.darkAlphaEmpty > 0.8) {
+    throw new Error(
+      `ECLIPSE.veilAlpha ${ECLIPSE.veilAlpha} + MAGIC.darkAlphaEmpty ` +
+        `${MAGIC.darkAlphaEmpty} exceed 0.8: stacked, the scenery would drop ` +
+        `to true black. Lower one of them.`
+    );
+  }
+}
+
 /**
  * Palette contrast floor — the number the dev assertion below enforces.
  *
@@ -1578,6 +1655,20 @@ if (import.meta.env.DEV) {
               `below the documented floor of ${HALO_CONTRAST_MIN}. The halo is how the ` +
               `game teaches grazing: brighten palette.haloColor, or pull the sky's ` +
               `luminance away from it.`
+          );
+        }
+        // The same floor under the Eclipse veil: an Eclipse can hold on any
+        // tier, in any light, and the halo must survive it everywhere. The
+        // veil only darkens, which RAISES contrast on the dark palettes —
+        // this check exists for the day a palette or the veil goes light.
+        const eclipsedBg = composite(ECLIPSE.veilColor, bg, ECLIPSE.veilAlpha);
+        const seenEclipsed = ratio(composite(halo, eclipsedBg, alpha), eclipsedBg);
+        if (seenEclipsed < HALO_CONTRAST_MIN) {
+          throw new Error(
+            `TIERS "${tier.nameKey}": the graze halo drops below the contrast floor ` +
+              `under the Eclipse veil — ${seenEclipsed.toFixed(3)} at the ${where} of ` +
+              `the gradient (${light}), floor ${HALO_CONTRAST_MIN}. Adjust ` +
+              `ECLIPSE.veilColor/veilAlpha or the palette's halo.`
           );
         }
       }

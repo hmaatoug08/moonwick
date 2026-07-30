@@ -9,6 +9,17 @@ This project follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+**The Eclipse — the prestige state above Full Moon** (`ECLIPSE` in `src/config.ts`, `src/FlightScene.ts`, `src/witchShape.ts`, `src/music.ts`, `src/sfx.ts`, `src/stats.ts`, `src/ScoresScene.ts`, `src/i18n.ts`, `CLAUDE.md`, `DESIGN.md`)
+
+Full Moon was a ceiling with nothing behind it: the ninth chained graze felt identical to the eighth. Now HOLDING the cap — `ECLIPSE.holdSeconds` (6 s) of continuous Full Moon, a timed fuse that resets the instant the multiplier leaves x5 (timed, not graze-counted: the same feat on every tier whatever the spawn rhythm; settled in #19) — veils the moon — a shadow disc of the moon's own texture slides over the face leaving a warm-white corona, the golden veil gives way to deep indigo, and the witch becomes the brightest light in the frame (body, rim, aura and trail lift to hot white-gold). In the music a standing shimmer pair (octave + twelfth over the pad's root) fades in and the melody's walk lifts one octave; one soft low bell marks the instant it engages.
+
+- **Pays nothing, on purpose**: the multiplier stays x5 and no score changes — prestige, per the omens/Percée charter; DESIGN.md, "The Eclipse", argues why. Falls with the combo, whole (timer at 0 or death); the impact beat freezes the eclipsed world as-is.
+- **Readability invariant untouched by construction**: the eclipse veil (`veilAlpha` 0.26, normal blend) sits on the darkness overlay's layer, under obstacles, halos, thread and witch; darkening only the background *raises* halo contrast. Three new dev assertions: `holdSeconds > 0` (strictly above Full Moon, even if the multiplier is retuned), `veilAlpha + MAGIC.darkAlphaEmpty <= 0.8` (the stacked veils never reach true black), and the palette halo check re-run under the Eclipse veil on every tier sky — both gradient ends, lit and cooled, same `HALO_CONTRAST_MIN` floor.
+- **Wordless during play** — the two allowed non-numeric strings stay exactly two. The name exists only on the Scores page: new Journal row (`scores.eclipses`, all four languages).
+- **Two new tolerant `LifetimeStats` fields**, `eclipses` and `eclipseTime`, written at the single write-at-death; no version bump (the omens' growth rule).
+- Nothing in generation, difficulty, MERCY or the daily reads the eclipse flag — a daily flight can eclipse and everyone's course is still identical.
+- New constants: `ECLIPSE` block, `MUSIC.shimmerGain/shimmerMults/shimmerMelodyLift`, `SFX.eclipseBell*`. `npm run build` green; verified in the browser (enter/exit choreography, stacked-darkness worst case, death mid-eclipse, restart mid-eclipse).
+
 **The omens — a wordless collection** (`src/omens.ts` new, `src/ScoresScene.ts`, `src/stats.ts`, `src/FlightScene.ts`, `src/config.ts`, `src/i18n.ts`, `src/save.ts`, `CLAUDE.md`, `DESIGN.md`)
 
 The collection page the Scores scene was built paged for: twelve procedural glyphs on a new "Omens" tab, in journey order — the discovery, the forest, mastery, the moon. Signs, not tasks: no unlock condition is ever written in prose, and the grid read top-to-bottom is the witch's night told without a sentence.
