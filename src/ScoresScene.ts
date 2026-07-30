@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { HISTORY, TIERS, TYPE, WORLD } from "./config";
 import { onLanguageChange, t, type StringKey } from "./i18n";
 import { ESSENCES } from "./obstacleShapes";
-import { loadHistory, loadStats } from "./save";
+import { loadDaily, loadHistory, loadStats } from "./save";
 import { shareScoreImage } from "./share";
 import { loadLifetimeStats } from "./stats";
 import { capsText, diamondDivider, fitText, hairline, serifText, setCaps } from "./ui";
@@ -61,11 +61,15 @@ const PAGES: Page[] = [
       // "Recent runs" is NOT a row any more: the same data draws as five bars
       // under the table (see drawRecentRuns) — read at a glance, gold on the
       // best. A string of five numbers asked to be compared; bars just are.
-      return [
+      const rows: Row[] = [
         { label: t("scores.best"), value: String(stats.bestScore), gold: true },
         { label: t("scores.bestCombo"), value: String(Math.max(lifetime.bestCombo, stats.bestCombo)) },
         { label: t("scores.bestTime"), value: duration(lifetime.bestTime) }
       ];
+      // Today's Daily Moon, while it lasts: gone at midnight UTC with the day.
+      const daily = loadDaily(new Date().toISOString().slice(0, 10));
+      if (daily) rows.push({ label: t("menu.daily"), value: String(daily.best) });
+      return rows;
     }
   },
   {

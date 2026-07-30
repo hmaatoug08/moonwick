@@ -225,11 +225,22 @@ Every key is prefixed `moonwick:` and handled in `src/save.ts` — never touch `
 | `moonwick:games` | Number of games played |
 | `moonwick:sound` | `"1"` (default) / `"0"` — settings toggle, persists across sessions |
 | `moonwick:music` | `"1"` (default) / `"0"` — music toggle, separate from the sound toggle |
+| `moonwick:daily` | JSON `{ date, best, attempts }` — today's Daily Moon; replaced whole when the UTC date changes. Malformed content degrades to "no daily yet" |
 | `moonwick:tutorialDone` | `"1"` after the first successful graze; gates the one-off first-graze celebration so it never fires twice |
 | `moonwick:lang` | `"en"` / `"fr"` / `"es"` / `"it"` — explicit choice in the settings, wins permanently over `navigator.language` |
 | `moonwick:history` | JSON array of the last `HISTORY.size` scores, oldest first. Malformed or hand-edited content degrades to an empty list, never throws |
 | `moonwick:deaths` | JSON array of the last `DEATHS.size` (50) deaths, oldest first: `{ t, tier, cause, grazes }`. Tuning source of truth, and what `MERCY` is derived from. Individual malformed entries are dropped rather than poisoning the list |
 | `moonwick:stats` | Versioned lifetime statistics (`version: 1`), written once per run at death. Missing fields degrade to defaults rather than wiping the object. See "Lifetime statistics" |
+
+## The Daily Moon — one shared forest a day
+
+Started from the home row with `scene.start("flight", { daily: true })`; in-place replays stay on the daily, going home leaves it. -> DESIGN.md, "The Daily Moon".
+
+- **The seed is the UTC date** (`hashSeed("moonwick:" + YYYY-MM-DD)`, src/rng.ts): every player on earth flies the SAME forest, no backend. Re-armed on every attempt — unlimited attempts, one course.
+- **Seeded means GAMEPLAY draws only** (`ObstacleSpawner.setSeed`): intervals, categories, gap sizes, gap positions, branch sides. Cosmetic silhouette-variant picks stay free — course parity is COLLISION parity.
+- **All personalisation is OFF in daily mode**: MERCY easing and the authored onboarding opening both change the course, and the daily exists so nobody's course differs.
+- **A daily flight is still a flight**: it feeds the classic records, history, stats and death log as normal, PLUS the day's best under `moonwick:daily` (best-of-day, attempt count; yesterday's record dies with the date, UTC).
+- One shared `rng`/`hashSeed` implementation (src/rng.ts) serves the scenery, the music and the daily: "seeded" always means the same thing.
 
 ## Accessibility and quality (permanent floor)
 - `prefers-reduced-motion` honoured for screen shake and slow motion.

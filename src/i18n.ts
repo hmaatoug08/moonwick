@@ -26,6 +26,8 @@ const EN = {
   "menu.hold": "Hold to fly",
   "menu.tap": "Tap anywhere",
   "menu.best": "Best",
+  // The shared daily course: same forest for everyone, seeded by the UTC date.
+  "menu.daily": "Daily Moon",
   // Under the lockup on a first launch only: once a best score exists, the
   // record takes this line. The brand NAME stays out of i18n; its tagline is
   // interface text like any other.
@@ -113,6 +115,7 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "menu.hold": "Maintiens pour voler",
     "menu.tap": "Tape n'importe où",
     "menu.best": "Record",
+    "menu.daily": "Lune du jour",
     "menu.tagline": "Un vol de nuit",
 
     "settings.title": "Réglages",
@@ -184,6 +187,7 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "menu.hold": "Mantén pulsado para volar",
     "menu.tap": "Toca en cualquier lugar",
     "menu.best": "Récord",
+    "menu.daily": "Luna del día",
     "menu.tagline": "Un vuelo nocturno",
 
     "settings.title": "Ajustes",
@@ -255,6 +259,7 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
     "menu.hold": "Tieni premuto per volare",
     "menu.tap": "Tocca ovunque",
     "menu.best": "Record",
+    "menu.daily": "Luna del giorno",
     "menu.tagline": "Un volo notturno",
 
     "settings.title": "Impostazioni",

@@ -212,3 +212,20 @@ export function ensureLogoTexture(scene: Phaser.Scene): void {
   drawCrescentMark(texture.getContext(), 0, pad, size, "full");
   texture.refresh();
 }
+
+export const LOGO_MARK_SMALL_KEY = "logo-mark-small";
+
+/**
+ * The small recipe as a texture, for row-icon sizes: crescent and flame
+ * alone — the two-tier rule (no witch under `LOGO.witchMinPx`) applies to
+ * in-game chrome exactly as it does to favicons.
+ */
+export function ensureLogoTextureSmall(scene: Phaser.Scene): void {
+  if (scene.textures.exists(LOGO_MARK_SMALL_KEY)) return;
+  const size = LOGO.unit;
+  const pad = LOGO_PAD_UNITS;
+  const texture = scene.textures.createCanvas(LOGO_MARK_SMALL_KEY, size, size + pad);
+  if (!texture) return;
+  drawCrescentMark(texture.getContext(), 0, pad, size, "small");
+  texture.refresh();
+}
