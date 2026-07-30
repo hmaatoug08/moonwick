@@ -374,6 +374,46 @@ inside the same family. The dev assertion caps a step at 140° and the whole
 sweep at 260°, so the next palette someone authors cannot quietly reintroduce
 the long way round.
 
+### Monotone was not enough: the steps have to be spread
+
+The first version of these palettes advanced in one direction and passed every
+assertion — and two tiers out of five still looked exactly like the violet they
+replaced. Measured against the original sky: The Dark Wood **ΔE 3.9**, The
+Brambles **ΔE 5.0**. Below about 2.3 a difference is imperceptible; at 4 it is
+"maybe, side by side, on a good screen". In a game played on a phone at night,
+that is nothing. The Moon's Eye, meanwhile, was ΔE **0.0** — unchanged by
+construction, since `MOON_EYE` supplies its sky and the palette holds only the
+fallback.
+
+The cause was distribution, not direction. The arc ran 194 -> 261 -> 303 -> 324
+on the bottoms: steps of 67, 42 and **21** degrees, and 43, 42 and **7** on the
+tops. Two tiers sharing a 7-degree step are the same colour. The assertion
+checked that every step was forward and under 140; nobody had asked whether the
+steps were *even*, so the lopsidedness was invisible to it.
+
+The fix was to re-spread rather than to nudge: an even arc (52, 51, 55, 53
+degrees) chosen by searching for the set that maximises the worst of "adjacent
+tiers differ" and "each tier differs from what it replaced", subject to every
+existing invariant. Results, bottoms, in ΔE:
+
+| | adjacent separation | vs the original sky |
+| --- | --- | --- |
+| before | 32.9 / 12.6 / 24.2 / 61.0 | 33.3 / 3.9 / 5.0 / 14.1 / 0.0 |
+| after | **51.2 / 17.0 / 42.3 / 61.4** | **36.6 / 19.0 / 19.6 / 15.7 / 0.0** |
+
+`PALETTE_STEP_MIN` (30°) now enforces the spacing on the effective skies, and it
+was verified to reject the arc that shipped.
+
+Two constraints shaped the search as much as the objective did. **Saturation had
+to do the work**, because luminance is pinned (see below) — hence 0.60-0.86 on
+the coloured tiers, up from 0.45-0.57. And **the halo had to stay violet**: the
+unconstrained search happily proposed an orange halo for The Wall, which would
+have read as a reward colour and broken both the Affordance rule ("a translucent
+violet halo") and the gold rationing. The Wall was also pinned dark rather than
+allowed to brighten for a bigger ΔE: being the blackest tier is half of how it
+reads, which is why it is the one palette that still measures only ΔE 15.7
+against the original and is fine that way — it is 42.3 from its neighbour.
+
 The order the tiers happen to want — teal, violet, wine, ink, gold — is why the
 direction is forced rather than chosen. The Wall was specified as "blue-black",
 and blue would have meant going *back* from the Brambles' wine. It is a
