@@ -9,6 +9,16 @@ This project follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+**PWA — the web version is the app** (`src/pwa.ts` new, `public/sw.js` new, `index.html`, `src/main.ts`, `CLAUDE.md`, `DESIGN.md`)
+
+Web packaging ahead of P7 (Capacitor untouched): installable, fullscreen, portrait-locked, offline-capable — and still zero asset files.
+
+- **Manifest and app icons generated at boot** (`src/pwa.ts`): icons drawn by `drawCrescentMark` on canvases (night gradient, stars, the full mark WITH the witch — 180/192/512 px all clear the 88 px two-tier threshold, plus a maskable variant), the manifest linked as a blob object URL, the iOS `apple-touch-icon` as a data URI. `display: fullscreen`, `orientation: portrait`, theme colour `#05040c`.
+- **Offline** (`public/sw.js` — code, not an asset; the one file beside the sources): network-first with runtime caching, so a deploy wins on the next online visit and offline serves the last good load; no precache manifest to maintain against Vite's hashed filenames. Registered in production only. Verified on the built app: worker activated, page controlled, shell + bundle + fonts cached after one revisit.
+- **Viewport polish** (index.html): `viewport-fit=cover` (the bottom stays `SAFE_BOTTOM`'s business until P7's real insets), `100dvh`, `overscroll-behavior: none`, `touch-action: none`, no text selection, iOS installed-app metas.
+- **Portrait guard**: a wordless rotate glyph (phone outline, golden arrow — an icon, not an instruction, nothing to translate) shown only on coarse-pointer devices in short-landscape, so desktop windows never see it.
+- No gameplay, scoring or difficulty change. Rules in CLAUDE.md ("PWA"), reasoning in DESIGN.md ("The PWA shell").
+
 **The perfect graze + the first three trees** (`GRAZE_TIERS`/`ONBOARDING` in `src/config.ts`, `src/FlightScene.ts`, `src/obstacles.ts`, `src/sfx.ts`, `CLAUDE.md`, `DESIGN.md`)
 
 Two changes to the first sixty seconds, both deepening what exists rather than adding a system.

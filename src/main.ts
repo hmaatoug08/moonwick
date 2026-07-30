@@ -3,7 +3,12 @@ import { DEBUG_STATS_DUMP, WORLD } from "./config";
 import { FlightScene } from "./FlightScene";
 import { ScoresScene } from "./ScoresScene";
 import { MenuScene } from "./MenuScene";
+import { initPwa } from "./pwa";
 import { describeLifetimeStats, loadLifetimeStats, resetLifetimeStats } from "./stats";
+
+// App-like packaging (manifest, icons, offline): independent of the boot, so
+// it neither waits for the fonts nor delays the first frame.
+initPwa();
 
 /**
  * The UI fonts must be ready BEFORE Phaser boots: fitText() and buttonWidth()
