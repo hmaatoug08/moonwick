@@ -403,9 +403,21 @@ export const STRINGS: Record<Lang, Record<StringKey, string>> = {
  * `{seconds}` appears ONLY in `nearRecord`, which is the one category that
  * cannot be picked without a record to measure against.
  *
+ * `newOmen` is the one EVENT-indexed category among the time-indexed ones:
+ * it fires when this run's deeds lit a new omen — at most twelve times in a
+ * player's whole life, so it never wears out. It says THAT a sign was
+ * earned, never which: the omen is only ever named on the Scores page (see
+ * CLAUDE.md, "The omens").
+ *
  * Each category holds 2-3 variants, picked at random by `deathMessage()`.
  */
-export type DeathCategory = "newRecord" | "nearRecord" | "bigCombo" | "earlyDeath" | "default";
+export type DeathCategory =
+  | "newRecord"
+  | "newOmen"
+  | "nearRecord"
+  | "bigCombo"
+  | "earlyDeath"
+  | "default";
 
 export const DEATH_MESSAGES: Record<Lang, Record<DeathCategory, string[]>> = {
   en: {
@@ -413,6 +425,11 @@ export const DEATH_MESSAGES: Record<Lang, Record<DeathCategory, string[]>> = {
       "New record. You have never flown this far.",
       "A new best. {tier} did not stop you.",
       "Record broken. That line was yours."
+    ],
+    newOmen: [
+      "The forest left you a sign.",
+      "A new sign is lit. Come and see it.",
+      "This flight earned you a sign."
     ],
     nearRecord: [
       "{seconds} s short of your record. You were almost there.",
@@ -441,6 +458,11 @@ export const DEATH_MESSAGES: Record<Lang, Record<DeathCategory, string[]>> = {
       "Nouveau record. Tu n'as jamais volé aussi loin.",
       "Nouveau meilleur vol. {tier} ne t'a pas arrêtée.",
       "Record battu. Cette ligne était la tienne."
+    ],
+    newOmen: [
+      "La forêt t'a laissé un signe.",
+      "Un signe nouveau s'est allumé. Viens le voir.",
+      "Ce vol t'a valu un signe."
     ],
     nearRecord: [
       "Il te restait {seconds} s. Tu y étais presque.",
@@ -471,6 +493,11 @@ export const DEATH_MESSAGES: Record<Lang, Record<DeathCategory, string[]>> = {
       "A new best. {tier} did not stop you.",
       "Record broken. That line was yours."
     ],
+    newOmen: [
+      "The forest left you a sign.",
+      "A new sign is lit. Come and see it.",
+      "This flight earned you a sign."
+    ],
     nearRecord: [
       "{seconds} s short of your record. You were almost there.",
       "Your best was {seconds} s away. So close.",
@@ -499,6 +526,11 @@ export const DEATH_MESSAGES: Record<Lang, Record<DeathCategory, string[]>> = {
       "New record. You have never flown this far.",
       "A new best. {tier} did not stop you.",
       "Record broken. That line was yours."
+    ],
+    newOmen: [
+      "The forest left you a sign.",
+      "A new sign is lit. Come and see it.",
+      "This flight earned you a sign."
     ],
     nearRecord: [
       "{seconds} s short of your record. You were almost there.",

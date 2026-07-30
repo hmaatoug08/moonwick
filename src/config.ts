@@ -1396,7 +1396,15 @@ export const OMENS = {
   /** A locked omen: the same glyph, dimmed to a riddle. No name. */
   dimAlpha: 0.2,
   /** One-time reveal of a newly lit omen: fade-in length. */
-  shimmerMs: 900
+  shimmerMs: 900,
+
+  // --- The bridge (see CLAUDE.md, "The omens"): the two sanctioned pointers
+  // to the page while an unrevealed omen waits. They say THAT something
+  // waits, never which — the omen is only ever named on the page itself.
+  /** Home-row glint: a small gold spark beside the Scores label. */
+  glintColor: 0xffd9a0,
+  /** Full breath cycle of the glint's alpha, in ms. Slow: a coal, not a LED. */
+  glintPulseMs: 2400
 } as const;
 
 /** Draws the lethal hitbox, the graze ring and the collision shapes. */

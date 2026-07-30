@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { HISTORY, OMENS, TIERS, TYPE, WORLD } from "./config";
 import { onLanguageChange, t, type StringKey } from "./i18n";
 import { ESSENCES } from "./obstacleShapes";
-import { loadOmensSeen, markOmensSeen, OMEN_LIST } from "./omens";
+import { hasUnseenOmens, loadOmensSeen, markOmensSeen, OMEN_LIST } from "./omens";
 import { loadDaily, loadHistory, loadStats } from "./save";
 import { shareScoreImage } from "./share";
 import { loadLifetimeStats } from "./stats";
@@ -195,7 +195,11 @@ export class ScoresScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.page = 0;
+    // The page opens on the omens while an unrevealed one waits: the reveal
+    // is the collection's whole payoff, and it must not hide behind the
+    // Records tab. Otherwise, Records — the default a progression hub owes.
+    const omensPage = PAGES.findIndex((p) => !p.build);
+    this.page = hasUnseenOmens() && omensPage >= 0 ? omensPage : 0;
     this.tabLabels = [];
     this.tabZones = [];
     this.rowLabels = [];

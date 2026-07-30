@@ -9,6 +9,16 @@ This project follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+**The omens' bridge — earned omens are no longer invisible** (`src/omens.ts`, `src/FlightScene.ts`, `src/MenuScene.ts`, `src/ScoresScene.ts`, `src/i18n.ts`, `src/config.ts`, `CLAUDE.md`, `DESIGN.md`) — closes #25
+
+Playtest feedback: an omen earned during play was completely silent unless the player happened to open Scores -> Omens, and the core loop never passes through there — the reveal, the collection's whole payoff, was structurally missable. Two quiet layers fix it; both say only THAT a sign waits, never which (naming stays on the page alone):
+
+- **The death line carries it**: new `newOmen` death-message category — "The forest left you a sign." — fired when this run's deeds lit a new omen. Whole templates in all four languages (anti-concatenation rule), no sixth element on the death screen, at most twelve firings in a player's life. Priority: just under `newRecord`, above the time bands (rarer than all of them; a record stays the bigger news). The one event-indexed category among time-indexed ones — documented as such. The category is now picked AFTER the death writes (it reads the folded stats); `previousBestTime` is still captured before them, so nothing else changed meaning.
+- **The trail to the page glows**: a small gold spark beside the home screen's Scores label while a lit omen is unrevealed (`OMENS.glintColor`, breathing over `glintPulseMs` 2400 — a coal, not a LED), and the Scores page opens directly on the Omens tab in that state so the reveal shimmer cannot hide behind Records.
+- New pure helpers in omens.ts: `litOmenIds()` and `hasUnseenOmens()` — the bridge is derived on every read, exactly like lit-or-not itself. No new storage.
+- Rejected on purpose (-> DESIGN.md, "The bridge"): an in-run announcement (attention cost mid-dodge; every omen deed already has its in-run celebration) and a death-screen list of earned omens (the exact regression the five-things rule exists to prevent).
+- CLAUDE.md amended narrowly: the death-line priority list gains `newOmen` at #2, and the omens' "no announcement" rule becomes a CLOSED list of the two sanctioned pointers.
+
 **The omens — a wordless collection** (`src/omens.ts` new, `src/ScoresScene.ts`, `src/stats.ts`, `src/FlightScene.ts`, `src/config.ts`, `src/i18n.ts`, `src/save.ts`, `CLAUDE.md`, `DESIGN.md`)
 
 The collection page the Scores scene was built paged for: twelve procedural glyphs on a new "Omens" tab, in journey order — the discovery, the forest, mastery, the moon. Signs, not tasks: no unlock condition is ever written in prose, and the grid read top-to-bottom is the witch's night told without a sentence.

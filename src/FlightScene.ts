@@ -40,12 +40,14 @@ import { Difficulty, Obstacle, ObstacleSpawner } from "./obstacles";
 import {
   DeathCause,
   isTutorialDone,
+  loadStats,
   markTutorialDone,
   pushDeath,
   recordDailyRun,
   recordRun,
   shouldEase
 } from "./save";
+import { litOmenIds } from "./omens";
 import { hashSeed } from "./rng";
 import { ESSENCES, type Essence } from "./obstacleShapes";
 import { PerceeMarker, perceeTension } from "./percee";
@@ -1184,16 +1186,23 @@ export class FlightScene extends Phaser.Scene {
 
   /**
    * Which sentence fits this run. Fixed priority: a record beats everything,
-   * then a near miss on the record, then a long chain, then a run that ended
-   * before it started. `previousBest` is the record from BEFORE this run.
+   * then a newly lit omen, then a near miss on the record, then a long chain,
+   * then a run that ended before it started. `previousBest` is the record
+   * from BEFORE this run; `omenLit` is whether this run's deeds lit a new
+   * omen (a reading of the folded stats, so the caller computes it after the
+   * writes).
    */
-  private pickDeathCategory(previousBestTime: number): DeathCategory {
+  private pickDeathCategory(previousBestTime: number, omenLit: boolean): DeathCategory {
     // The record is a TIME (see La Percée), so the categories are measured in
     // seconds too — that is what lets the line quote the gap and stay honest.
     // `nearRecord` is the only category that can quote `{seconds}`, and it can
     // only be reached when a record actually exists.
     const hasRecord = previousBestTime >= PERCEE.minTime;
     if (hasRecord && this.runDuration > previousBestTime) return "newRecord";
+    // The one event-indexed category: a new omen is rarer than every time
+    // band below (twelve in a whole life), so it outranks them — but a new
+    // record stays the bigger news, and its own line is the better one.
+    if (omenLit) return "newOmen";
     if (hasRecord && this.runDuration >= previousBestTime * DEATH_MESSAGE.nearRecordRatio) {
       return "nearRecord";
     }
@@ -1231,15 +1240,19 @@ export class FlightScene extends Phaser.Scene {
     // visual rest. The impact sound stays a one-shot on top.
     music.setMode("rest");
 
-    // Captured BEFORE either write: the record this run was actually chasing.
-    // The message is indexed on TIME (see La Percée), not on score.
+    // Captured BEFORE either write: the record this run was actually chasing,
+    // and the omens the deeds already lit — the writes below fold this run
+    // in, and the death line's `newOmen` category is the difference between
+    // the two readings.
     const previousBestTime = this.lifetime.bestTime;
-    this.deathCategory = this.pickDeathCategory(previousBestTime);
+    const litBefore = new Set(
+      litOmenIds(this.lifetime, Math.max(this.lifetime.bestCombo, loadStats().bestCombo))
+    );
 
     // Persistence: the run is recorded exactly once, here.
     // `history` is still written for the Scores page; the death screen no
     // longer shows it.
-    recordRun(this.score, this.bestComboThisRun, this.bestTierThisRun);
+    const { stats: savedStats } = recordRun(this.score, this.bestComboThisRun, this.bestTierThisRun);
 
     // Lifetime stats: the ONE write of the run, here and nowhere else.
     this.lifetime = recordRunStats({
@@ -1263,6 +1276,15 @@ export class FlightScene extends Phaser.Scene {
     // The day's best, kept beside the classic records (which this run also
     // feeds: a daily flight is still a flight).
     if (this.dailyMode) recordDailyRun(this.dailyDate, this.score);
+
+    // Picked AFTER the writes on purpose: whether this run lit a new omen is
+    // a reading of the folded stats, and the line must never guess. The omen
+    // is not named — naming happens on the Scores page alone.
+    const omenLit = litOmenIds(
+      this.lifetime,
+      Math.max(this.lifetime.bestCombo, savedStats.bestCombo)
+    ).some((id) => !litBefore.has(id));
+    this.deathCategory = this.pickDeathCategory(previousBestTime, omenLit);
 
     // Tuning log. `runDuration` is real flown seconds, so DEBUG_START_TIER
     // cannot pollute the measurement.
