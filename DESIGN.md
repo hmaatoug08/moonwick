@@ -230,7 +230,10 @@ not shrinking the rows.
 
 Current pages: **Records** (best score, best combo, longest flight, recent
 runs), **Journal** (runs, time, grazes, Full Moons, closest graze), **The
-forest** (per tier and per species).
+forest** (per tier and per species), **Omens** (the collection — see "The
+omens" below; it is the page the paging was built for, and the one page whose
+content is a glyph grid rather than label/value rows, which is why `build` is
+now optional on a page).
 
 Note: `save.ts` and `stats.ts` both track a best combo, from different eras of
 the codebase. The page reads the larger of the two so it can never show
@@ -241,6 +244,84 @@ The gap to the record is spelled out in a whole sentence (`percee_gap`,
 full tier-segmented road on the death screen; that road was removed when the
 screen was cut back to the five things it now shows. The frozen thread carries
 the same idea in a hairline.)
+
+---
+
+## The omens — the collection is a reading, not a ledger
+
+The game needed something to want *between* runs — the Scores page was built
+paged for exactly this. What it must not become is a quest log: Moonwick has
+one skill and one economy, and a checklist of "do X ten times" tasks would
+bolt a second economy onto a game whose whole appeal is that nothing stands
+between the player and the next run.
+
+So the omens are **signs, not tasks**: twelve procedural glyphs commemorating
+deeds the game already cares about, arranged in journey order — the discovery
+(the first spark, a hundred sparks, the chain), the forest (the brambles, the
+Wall, the Eye), mastery (the needle, the flurry, the long night), the moon
+(Full Moon, the Breakthrough, the day's moon). Read left to right, top to
+bottom, the grid IS the lore: the witch's whole night, told without a
+sentence. That is what "the lore reads wordlessly" means here — not that the
+page has no text (names are labels, and labels are allowed), but that the
+STORY is carried by glyph order and glyph light, never by prose.
+
+**Derived, never stored — the MERCY precedent.** Whether an omen is lit is a
+pure predicate over the lifetime stats, recomputed at every page open. The
+alternative — a stored set of unlocked ids — is how every drifted meta system
+starts: the flag and the deed go out of sync, a restored save loses trophies
+the stats still prove, a new omen ships locked for veterans who earned it
+years ago. Deriving kills all three at once, and it is the same shape as
+MERCY's trigger ("derived from the death log, never stored") for the same
+reason. The corollary is a rule for growth: when a deed worth an omen is not
+recorded yet, the fix is a new stats field, never an unlock flag. Two were
+added this way — `perceesCrossed` and `dailiesFlown`, both absent because the
+Percée and the daily predate the idea that anything would ever read them —
+and the versioned, tolerant loader absorbed them for free.
+
+The one thing persisted is `moonwick:omensSeen`: which reveals the page has
+already SHOWN. That is presentation state, not game state — corrupt it, wipe
+it, hand-edit it, and the only consequence is a shimmer replaying. It exists
+because a collection with no reveal moment is a spreadsheet; it is kept
+separate because a reveal moment must never be allowed to become the source
+of truth.
+
+**Why nothing announces an omen during play.** The no-words rule and the
+closed death screen leave no legal surface, and that is not a constraint to
+route around — it is the design. An unlock toast mid-run would interrupt the
+one thing the game protects (flow into the next attempt); a badge on the
+death screen would be the sixth thing. Omens are discovered the way the
+Scores page is visited: on purpose, between sessions, in the reading room.
+The reveal there is deliberately small — a fade-in and the name in gold for
+that visit — because gold is rationed to rewards, and this page is quiet by
+charter.
+
+**Why a locked omen shows its glyph but not its name.** Three options were on
+the table: show everything (a checklist — tells the player what to grind),
+show nothing (empty sockets — mystery, but indistinguishable holes sell no
+story), show the glyph dimmed with no name. The third is the riddle posture:
+the needle, the eye, the arch of dots are all legible enough to raise "what
+is that?" and none of them is an instruction. The name confirms the deed
+after the fact — part of the reward, like the tier names that only mean
+something once you have flown into them. No unlock condition is ever written
+in prose, in any language; the moment one is, the collection becomes a task
+list and the anti-quest-log premise dies.
+
+**Thresholds sit on existing measurements.** The needle omen's band IS
+`GRAZE_TIERS.needleBand` — same number, read from the same constant, so the
+omen can never drift from the graze tier it commemorates. The chain asks 10,
+deliberately above the death screen's `bigComboThreshold` (8): the sentence
+praises a good chain, the omen marks a great one. The tier omens read
+reached/cleared from `perTier` — "Through the Wall" asks *cleared*, the only
+omen that does, because the Wall is the tier whose whole identity is being
+gotten through.
+
+**The grid, not rows.** Rows are label/value pairs; a collection is objects.
+The `PAGES` model gained the smallest possible extension — `build` became
+optional, a page without it is the grid — rather than a parallel page system.
+The glyphs speak the interface-icon vocabulary (dark mass, moon-side light,
+`MOON_ON_RIGHT`), sit free on the page with no sockets and no tiles (no
+bordered boxes — rule one), and answer to the same bottom limit as the row
+pages, enforced by the same style of boot assertion.
 
 ---
 

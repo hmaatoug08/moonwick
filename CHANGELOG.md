@@ -9,6 +9,19 @@ This project follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+**The omens — a wordless collection** (`src/omens.ts` new, `src/ScoresScene.ts`, `src/stats.ts`, `src/FlightScene.ts`, `src/config.ts`, `src/i18n.ts`, `src/save.ts`, `CLAUDE.md`, `DESIGN.md`)
+
+The collection page the Scores scene was built paged for: twelve procedural glyphs on a new "Omens" tab, in journey order — the discovery, the forest, mastery, the moon. Signs, not tasks: no unlock condition is ever written in prose, and the grid read top-to-bottom is the witch's night told without a sentence.
+
+- **Purely commemorative**: an omen never touches gameplay, generation, scoring or difficulty. No modifier, no unlock-gated content.
+- **Derived, never stored** (the MERCY precedent): lit-or-not is a pure predicate over the lifetime stats, recomputed at every open — no unlock key, no drift, retroactive credit for veterans. The only persisted key is `moonwick:omensSeen` (which reveals already happened — presentation state; malformed content costs one repeated shimmer).
+- **Two new `LifetimeStats` fields**, `perceesCrossed` and `dailiesFlown` (the Percée and the daily predate anything reading them): recorded at the existing single write-at-death, absorbed by the tolerant loader with no version bump. This is the growth rule — a deed worth a new omen is paid for with a stats field, never a stored flag.
+- **Locked = the glyph dimmed (`OMENS.dimAlpha` 0.2), no name**; lit = full glyph plus its caps name; newly lit = a one-time fade-in (`shimmerMs` 900) with the name in gold for that visit. No announcement during play or on the death screen — omens are discovered on the Scores page, on purpose.
+- **`PAGES` model minimally extended**: `build` is now optional, and the one page without it is the glyph grid. The grid answers to the same above-the-share-row limit as the row pages (new boot assertion), plus an id-uniqueness assertion.
+- Thresholds only the collection needs live in `OMENS` (config.ts): `hundredSparks` 100, `chainCombo` 10 (above the death line's `bigComboThreshold` 8 on purpose), `flurryPerSecond` 3, `longNightSeconds` 1800. The needle omen reads `GRAZE_TIERS.needleBand` itself — never duplicated.
+- 13 new i18n keys (`scores.omens`, `omen.*`) in all four languages; glyphs speak the interface-icon vocabulary (dark body, moon-side rim, `MOON_ON_RIGHT`) — no image file, per the zero-asset pillar.
+- Verified in the browser: fresh profile shows the full dim riddle wall; an injected veteran profile lights all twelve with the gold reveal, and reopening drops the names to the muted label (seen-set persists); a partial profile in French lights five with correct fitted labels. `npm run build` green.
+
 **Fix: starting a run threw, so the game never left the home screen** (`src/FlightScene.ts`)
 
 Regression from the palette work, in the same session. `drawThread()` gained a read of `this.diffCurrent.inverted` (the progress thread flips polarity with the sky at The Moon's Eye), but `resetRun()` calls `drawThread()` *before* `diffCurrent` is assigned — so every attempt to start a run threw `Cannot read properties of undefined (reading 'inverted')` inside `create()`, leaving the scene stuck in CREATING with no scene active and nothing on screen.

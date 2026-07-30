@@ -1253,7 +1253,11 @@ export class FlightScene extends Phaser.Scene {
       reachedFullMoon: this.reachedFullMoonThisRun,
       fullMoonTime: this.fullMoonTimeThisRun,
       closestGraze: this.closestGrazeThisRun,
-      bestGrazesPerSecond: this.bestGrazesPerSecondThisRun
+      bestGrazesPerSecond: this.bestGrazesPerSecondThisRun,
+      // Only ever true with a real record: updatePercee bails out when
+      // perceeTime is 0, so a first run can never count as a crossing.
+      crossedPercee: this.perceeCrossed,
+      dailyFlight: this.dailyMode
     });
 
     // The day's best, kept beside the classic records (which this run also

@@ -1,7 +1,8 @@
 import Phaser from "phaser";
-import { HISTORY, TIERS, TYPE, WORLD } from "./config";
+import { HISTORY, OMENS, TIERS, TYPE, WORLD } from "./config";
 import { onLanguageChange, t, type StringKey } from "./i18n";
 import { ESSENCES } from "./obstacleShapes";
+import { loadOmensSeen, markOmensSeen, OMEN_LIST } from "./omens";
 import { loadDaily, loadHistory, loadStats } from "./save";
 import { shareScoreImage } from "./share";
 import { loadLifetimeStats } from "./stats";
@@ -31,8 +32,12 @@ type Row = { label: string; value: string; gold?: boolean };
 /** One page. Add an entry here to add a page. */
 type Page = {
   titleKey: StringKey;
-  /** Returns the rows to render, newest state each time it is opened. */
-  build: () => Row[];
+  /**
+   * Returns the rows to render, newest state each time it is opened.
+   * A page WITHOUT a builder is the omens grid, drawn by `drawOmens()` —
+   * the one page whose content is glyphs, not label/value rows.
+   */
+  build?: () => Row[];
 };
 
 // 40 px rows: the Forest page (the densest — 11 rows) must stay above the
@@ -113,6 +118,10 @@ const PAGES: Page[] = [
       }
       return rows;
     }
+  },
+  {
+    // The omens: a grid of glyphs, not rows — no builder, see drawOmens().
+    titleKey: "scores.omens"
   }
 ];
 
@@ -128,7 +137,7 @@ const ROWS_BOTTOM_LIMIT = SHARE_LINE_Y - 22;
 // page rather than shrinking the rows.
 if (import.meta.env.DEV) {
   for (const page of PAGES) {
-    const rows = page.build().length;
+    const rows = page.build?.().length ?? 0;
     const bottom = FIRST_ROW_Y + rows * ROW_HEIGHT;
     if (bottom > ROWS_BOTTOM_LIMIT) {
       throw new Error(
@@ -136,6 +145,16 @@ if (import.meta.env.DEV) {
           `past the ${ROWS_BOTTOM_LIMIT} limit where the share row starts. Split it into two pages.`
       );
     }
+  }
+  // The omens grid answers to the same limit: its last name baseline must
+  // stay above the share row, and adding omens is what would push it there.
+  const omenRows = Math.ceil(OMEN_LIST.length / OMENS.columns);
+  const omenBottom = OMENS.gridTop + (omenRows - 1) * OMENS.rowHeight + OMENS.nameGap + 12;
+  if (omenBottom > ROWS_BOTTOM_LIMIT) {
+    throw new Error(
+      `The omens grid (${OMEN_LIST.length} omens, ${omenRows} rows) reaches y=${omenBottom} ` +
+        `past the ${ROWS_BOTTOM_LIMIT} limit where the share row starts. Tighten the grid or page it.`
+    );
   }
 }
 
@@ -162,6 +181,11 @@ export class ScoresScene extends Phaser.Scene {
   private chartLabel!: Phaser.GameObjects.Text;
   private chartBars!: Phaser.GameObjects.Graphics;
   private chartValues: Phaser.GameObjects.Text[] = [];
+  private omenGlyphs: Phaser.GameObjects.Graphics[] = [];
+  private omenNames: Phaser.GameObjects.Text[] = [];
+  /** Omens revealed during THIS visit: they keep their gold until the scene
+   * closes, even through a language-change refresh. */
+  private omensRevealedNow = new Set<string>();
   private shareLabel!: Phaser.GameObjects.Text;
   private shareZone!: Phaser.Geom.Rectangle;
   private backZone!: Phaser.Geom.Rectangle;
@@ -178,6 +202,9 @@ export class ScoresScene extends Phaser.Scene {
     this.rowValues = [];
     this.rowLines = [];
     this.chartValues = [];
+    this.omenGlyphs = [];
+    this.omenNames = [];
+    this.omensRevealedNow = new Set();
 
     const sky = this.add.graphics();
     sky.fillGradientStyle(0x05040c, 0x05040c, 0x140f2c, 0x140f2c, 1);
@@ -211,7 +238,7 @@ export class ScoresScene extends Phaser.Scene {
 
     // Rows are created once, at the maximum a page can need, and reused: the
     // scene is opened and closed repeatedly and must not accumulate objects.
-    const maxRows = Math.max(...PAGES.map((p) => p.build().length));
+    const maxRows = Math.max(...PAGES.map((p) => p.build?.().length ?? 0));
     for (let i = 0; i < maxRows; i++) {
       const top = FIRST_ROW_Y + i * ROW_HEIGHT;
       const mid = top + ROW_HEIGHT / 2;
@@ -247,6 +274,16 @@ export class ScoresScene extends Phaser.Scene {
             color: TYPE.labelBright
           })
           .setOrigin(0.5, 0)
+      );
+    }
+
+    // The omens: one Graphics and one caps name per glyph, created once and
+    // redrawn on refresh. Per-omen objects so a newly lit one can fade in on
+    // its own; everything else stays put.
+    for (let i = 0; i < OMEN_LIST.length; i++) {
+      this.omenGlyphs.push(this.add.graphics().setVisible(false));
+      this.omenNames.push(
+        capsText(this, 0, 0, "", 10, TYPE.label, "600", 0.18).setOrigin(0.5).setVisible(false)
       );
     }
 
@@ -326,9 +363,12 @@ export class ScoresScene extends Phaser.Scene {
     });
 
     const page = PAGES[this.page];
-    const rows = page.build();
+    const rows = page.build?.() ?? [];
+    const isOmens = page.build === undefined;
+    // The omens page never shows the empty line: its dim grid IS its empty
+    // state, and a page of riddles reads better than an instruction.
     const empty = loadLifetimeStats().gamesPlayed === 0;
-    this.emptyText.setText(empty ? t("scores.empty") : "").setVisible(empty);
+    this.emptyText.setText(empty ? t("scores.empty") : "").setVisible(empty && !isOmens);
 
     this.rowLabels.forEach((label, i) => {
       const value = this.rowValues[i];
@@ -352,6 +392,66 @@ export class ScoresScene extends Phaser.Scene {
     });
 
     this.drawRecentRuns(empty);
+    this.drawOmens(isOmens);
+  }
+
+  /**
+   * The omens grid — the collection page's whole content.
+   *
+   * Lit or not is DERIVED here, on every open, from the lifetime stats (see
+   * src/omens.ts: derived, never stored). A locked omen is its glyph dimmed
+   * with no name: the glyph is the riddle, the name is part of the reward.
+   * An omen lit since the last visit fades in once and keeps its gold for
+   * this visit; `moonwick:omensSeen` only remembers that the reveal happened.
+   */
+  private drawOmens(visible: boolean): void {
+    const lifetime = loadLifetimeStats();
+    // Same reading as the Records page: the larger of the two eras' combos.
+    const bestCombo = Math.max(lifetime.bestCombo, loadStats().bestCombo);
+    const seen = loadOmensSeen();
+    const fresh: string[] = [];
+    const cellW = (WORLD.width - MARGIN_X * 2) / OMENS.columns;
+
+    OMEN_LIST.forEach((omen, i) => {
+      const glyph = this.omenGlyphs[i];
+      const name = this.omenNames[i];
+      glyph.clear().setVisible(visible);
+      name.setVisible(visible);
+      if (!visible) return;
+
+      const lit = omen.isLit(lifetime, bestCombo);
+      const isNew = lit && !seen.has(omen.id);
+      if (isNew) {
+        fresh.push(omen.id);
+        this.omensRevealedNow.add(omen.id);
+      }
+
+      const cx = MARGIN_X + cellW * ((i % OMENS.columns) + 0.5);
+      const cy = OMENS.gridTop + Math.floor(i / OMENS.columns) * OMENS.rowHeight;
+      omen.draw(glyph, cx, cy, lit ? 1 : OMENS.dimAlpha);
+      setCaps(name, lit ? t(omen.nameKey) : "");
+      name.setPosition(cx, cy + OMENS.nameGap);
+      name.setColor(this.omensRevealedNow.has(omen.id) ? TYPE.gold : TYPE.label);
+      fitText(name, cellW - 10, 10);
+
+      // The one-time reveal: a quiet fade-in, nothing more — gold is already
+      // the celebration, and this page is a reading room, not a run.
+      if (isNew) {
+        glyph.setAlpha(0);
+        name.setAlpha(0);
+        this.tweens.add({
+          targets: [glyph, name],
+          alpha: 1,
+          duration: OMENS.shimmerMs,
+          ease: "Quad.easeOut"
+        });
+      } else {
+        glyph.setAlpha(1);
+        name.setAlpha(1);
+      }
+    });
+
+    if (fresh.length > 0) markOmensSeen(fresh);
   }
 
   /**

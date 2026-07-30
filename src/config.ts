@@ -1360,6 +1360,45 @@ export const PROGRESS_THREAD = {
   spanFactor: 1.15
 } as const;
 
+/**
+ * The omens — the collection page on the Scores scene (src/omens.ts).
+ *
+ * Twelve signs the forest gives, arranged in journey order: the discovery, the
+ * forest, mastery, the moon. PURELY COMMEMORATIVE: an omen never touches
+ * gameplay, generation or scoring — it is a reading of deeds the lifetime
+ * stats already record. Unlock state is DERIVED from those stats on every
+ * open, never stored (see CLAUDE.md, "The omens").
+ *
+ * Thresholds that are already gameplay constants stay where they live
+ * (GRAZE_TIERS.needleBand is the needle omen's band); only the thresholds that
+ * exist for the collection alone are defined here.
+ */
+export const OMENS = {
+  /** Grazes for "A hundred sparks". */
+  hundredSparks: 100,
+  /** Best combo for "The chain". */
+  chainCombo: 10,
+  /** Best grazes inside one second for "The flurry". */
+  flurryPerSecond: 3,
+  /** Total seconds flown, all runs, for "The long night" (half an hour). */
+  longNightSeconds: 1800,
+
+  // --- Presentation (the grid on the Scores page).
+  /** Columns in the grid; rows follow from the roster length. */
+  columns: 3,
+  /** First row of glyphs, and the vertical rhythm between rows. */
+  gridTop: 268,
+  rowHeight: 106,
+  /** Glyph half-size in px (the drawing box is a 2r square). */
+  glyphR: 22,
+  /** Name baseline distance under the glyph centre. */
+  nameGap: 44,
+  /** A locked omen: the same glyph, dimmed to a riddle. No name. */
+  dimAlpha: 0.2,
+  /** One-time reveal of a newly lit omen: fade-in length. */
+  shimmerMs: 900
+} as const;
+
 /** Draws the lethal hitbox, the graze ring and the collision shapes. */
 export const DEBUG_HITBOX = false;
 
