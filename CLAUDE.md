@@ -232,6 +232,28 @@ Every key is prefixed `moonwick:` and handled in `src/save.ts` — never touch `
 | `moonwick:deaths` | JSON array of the last `DEATHS.size` (50) deaths, oldest first: `{ t, tier, cause, grazes }`. Tuning source of truth, and what `MERCY` is derived from. Individual malformed entries are dropped rather than poisoning the list |
 | `moonwick:stats` | Versioned lifetime statistics (`version: 1`), written once per run at death. Missing fields degrade to defaults rather than wiping the object. See "Lifetime statistics" |
 
+## PWA — the web version is the app (pre-P7)
+
+Web packaging only; Capacitor stays P7. -> DESIGN.md, "The PWA shell".
+
+- **The manifest and every app icon are GENERATED AT BOOT** (`src/pwa.ts`):
+  icons drawn by `drawCrescentMark` (the mark cannot fork) onto canvases,
+  the manifest linked as a blob URL. No image file — the zero-asset pillar
+  covers packaging too. Icon sizes (180/192/512) all exceed
+  `LOGO.witchMinPx`, so the witch rides; only the favicon is crescent-only.
+- **`public/sw.js` is the one file beside the sources** — it is CODE, not an
+  asset. Network-first with runtime cache: a deploy wins on the next online
+  visit, offline serves the last good load. Registered in **production
+  only** (the dev server must never fight a cache). Bump `CACHE` to force a
+  full invalidation.
+- **`viewport-fit=cover`**: the game may paint under the notch; the bottom
+  stays `SAFE_BOTTOM`'s business (real insets arrive with P7, same as
+  before).
+- **The rotate guard is a wordless glyph** (index.html): an icon, not an
+  instruction — nothing to translate, by construction. It only engages on
+  coarse-pointer devices in short-landscape, so desktop windows (always
+  landscape) never see it.
+
 ## Accessibility and quality (permanent floor)
 - `prefers-reduced-motion` honoured for screen shake and slow motion.
 - Sound volume low by default, mutable from the settings (choice persists).

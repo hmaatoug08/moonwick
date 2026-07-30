@@ -520,6 +520,39 @@ The celebration itself was strengthened with the choreography (slow motion
 260 -> 380 ms, flash 0.22 -> 0.3, sparks 26 -> 40): the moment the game
 clicks happens exactly once, and now the opening walks the player to it.
 
+### The PWA shell
+
+Sixty percent of the "mobile app" feel costs nothing at the app stores: an
+install banner, a home-screen icon, fullscreen chrome, offline load. Doing
+it BEFORE Capacitor (which stays P7) means the web version everyone can
+reach today already feels like the app — and everything here carries over
+unchanged when the wrapper arrives.
+
+**Why the manifest is a blob.** A manifest normally means a JSON file and a
+folder of PNG icons — the first asset files in a project whose pillar is
+having none. But a manifest is just JSON and an icon is just pixels, so
+both are built at boot: the icons drawn by `drawCrescentMark` (the same
+routine as the lockup, the share image and the favicon — the mark cannot
+fork into an "app icon variant"), the manifest assembled and linked as an
+object URL. Chrome installs from it; iOS takes the same canvas as a data-URI
+`apple-touch-icon`. Every icon size is above the 88 px two-tier threshold,
+so the witch rides on the home screen too.
+
+**Why network-first, not precache.** Vite hashes every filename, so a
+precache manifest would need a build plugin and a version dance. The game
+has no backend and no dynamic data: "whatever loaded once" IS the app.
+Network-first with runtime caching gets both properties for a page of code:
+online you always run the newest deploy, offline you run the last good
+load. The fonts cache as they flow past; if a cold offline start misses
+them, the boot's 2.5 s font race already degrades to system faces by
+design.
+
+**Why the rotate guard has no words.** It is interface shown before the
+game exists, so i18n cannot dress it — and it does not need dressing: a
+phone outline and a golden arrow rotating is legible in every language,
+which is the same bet the game itself makes everywhere. It engages only on
+coarse pointers in short-landscape: a desktop browser window is landscape
+all day, and a guard that nagged it would be worse than none.
 ### The impact beat
 
 The death screen used to replace the world on the very same frame the
