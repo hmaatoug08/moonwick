@@ -19,6 +19,24 @@ A daily seeded run, no backend: the seed is the UTC date hashed, so every player
 - **Home row** "Daily Moon" (`menu.daily`, four languages) with the small-recipe crescent icon (new `ensureLogoTextureSmall` — the two-tier no-witch rule applies to chrome) and today's best in gold once flown; the Records page shows the same row while the day lasts. A daily flight still feeds the classic records: a run is a run.
 - **`src/rng.ts` new**: the one mulberry32 + `hashSeed`, now shared by the scenery, the music and the daily — the two local copies deduplicated, "seeded" means one thing.
 - No scoring or difficulty change; the classic game is untouched (seed null = the exact previous behaviour, drawn from `Math.random`).
+**PWA — the web version is the app** (`src/pwa.ts` new, `public/sw.js` new, `index.html`, `src/main.ts`, `CLAUDE.md`, `DESIGN.md`)
+
+Web packaging ahead of P7 (Capacitor untouched): installable, fullscreen, portrait-locked, offline-capable — and still zero asset files.
+
+- **Manifest and app icons generated at boot** (`src/pwa.ts`): icons drawn by `drawCrescentMark` on canvases (night gradient, stars, the full mark WITH the witch — 180/192/512 px all clear the 88 px two-tier threshold, plus a maskable variant), the manifest linked as a blob object URL, the iOS `apple-touch-icon` as a data URI. `display: fullscreen`, `orientation: portrait`, theme colour `#05040c`.
+- **Offline** (`public/sw.js` — code, not an asset; the one file beside the sources): network-first with runtime caching, so a deploy wins on the next online visit and offline serves the last good load; no precache manifest to maintain against Vite's hashed filenames. Registered in production only. Verified on the built app: worker activated, page controlled, shell + bundle + fonts cached after one revisit.
+- **Viewport polish** (index.html): `viewport-fit=cover` (the bottom stays `SAFE_BOTTOM`'s business until P7's real insets), `100dvh`, `overscroll-behavior: none`, `touch-action: none`, no text selection, iOS installed-app metas.
+- **Portrait guard**: a wordless rotate glyph (phone outline, golden arrow — an icon, not an instruction, nothing to translate) shown only on coarse-pointer devices in short-landscape, so desktop windows never see it.
+- No gameplay, scoring or difficulty change. Rules in CLAUDE.md ("PWA"), reasoning in DESIGN.md ("The PWA shell").
+**The impact beat — death legibility** (`DEATH_FX` in `src/config.ts`, `src/FlightScene.ts`, `src/obstacles.ts`, `CLAUDE.md`, `DESIGN.md`)
+
+The death screen used to replace the world on the same frame the collision landed, hiding the answer to "what happened?" at the exact moment it was asked. Now the frozen world holds for `holdMs` (420 ms) before the rest screen appears:
+
+- a **cold spark at the precise contact point** — new `Obstacle.contactPoint()`, the closest point on the same collision shapes `distanceTo` reads, so the spark can never appear where the collision did not happen;
+- the **killer's moon-rim flashes bright** for the whole beat: of the trees on screen, THIS one ended the run;
+- the **witch recoils off the contact** (12 px, position only — the hitbox is dead).
+
+The spark is violet-white, never gold — gold is the reward colour and a death must not glitter. **The hold delays pixels, never input**: `onPointerDown` reads `dead`, not visibility, so the replay tap works from the first frame exactly as before; a mid-beat tap restarts instantly and `resetRun` cancels the pending reveal. The CLAUDE.md death rule was amended precisely: what must be synchronous is the input and the death-screen content, and both still are. Verified live: panel hidden during the hold, reveal timer at 420 ms, rim tinted, impact at the contact point; reveal confirmed firing after the hold. No scoring or difficulty change.
 
 **The perfect graze + the first three trees** (`GRAZE_TIERS`/`ONBOARDING` in `src/config.ts`, `src/FlightScene.ts`, `src/obstacles.ts`, `src/sfx.ts`, `CLAUDE.md`, `DESIGN.md`)
 

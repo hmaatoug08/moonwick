@@ -34,7 +34,8 @@ Hold = climb, release = descend. Gentle gravity, clamped speed.
 **Only by contact with an obstacle.** There is no other source of death in the game.
 - Lethal hitbox: an 8 px radius circle centred on the witch's TORSO — not on her drawing's bounding box — deliberately smaller than the visual (perceived generosity). Hat, cape and broom are never lethal. See "The witch".
 - Death screen: five things only — see "The death screen". Restart < 300 ms. The replay tap must never be read as a flight input.
-- **Nothing on the death screen may delay replaying.** The tap is live on the very first frame: no delay guard, no timer, no mandatory animation. Everything is drawn synchronously in `die()`.
+- **Nothing on the death screen may delay replaying.** The tap is live on the very first frame: no delay guard, no mandatory animation. All death-screen content is drawn synchronously in `die()`; the ONLY thing deferred is the rest screen's reveal, behind the impact beat.
+- **The impact beat** (`DEATH_FX`): before the rest screen appears, the frozen world holds `holdMs` (420) showing WHAT killed her — a cold spark at the exact contact point (`Obstacle.contactPoint`, same shapes as the collision), the killer's moon-rim flashing bright, the witch recoiling off it. **The hold delays pixels, never input**: `onPointerDown` reads `dead`, not visibility, and a mid-beat tap restarts instantly (`resetRun` cancels the pending reveal — mandatory, or the rest screen would drop onto the new run). The spark is cold violet-white, never gold: an ending, not a reward. -> DESIGN.md, "The impact beat".
 
 ### The death screen's one line
 It is the only prose on that screen, so a single sentence does **both jobs at once**: it says what happened (the gap to the record, the combo, the tier) and it gives a reason to go again. Two short lines at most.
@@ -241,6 +242,27 @@ Started from the home row with `scene.start("flight", { daily: true })`; in-plac
 - **All personalisation is OFF in daily mode**: MERCY easing and the authored onboarding opening both change the course, and the daily exists so nobody's course differs.
 - **A daily flight is still a flight**: it feeds the classic records, history, stats and death log as normal, PLUS the day's best under `moonwick:daily` (best-of-day, attempt count; yesterday's record dies with the date, UTC).
 - One shared `rng`/`hashSeed` implementation (src/rng.ts) serves the scenery, the music and the daily: "seeded" always means the same thing.
+## PWA — the web version is the app (pre-P7)
+
+Web packaging only; Capacitor stays P7. -> DESIGN.md, "The PWA shell".
+
+- **The manifest and every app icon are GENERATED AT BOOT** (`src/pwa.ts`):
+  icons drawn by `drawCrescentMark` (the mark cannot fork) onto canvases,
+  the manifest linked as a blob URL. No image file — the zero-asset pillar
+  covers packaging too. Icon sizes (180/192/512) all exceed
+  `LOGO.witchMinPx`, so the witch rides; only the favicon is crescent-only.
+- **`public/sw.js` is the one file beside the sources** — it is CODE, not an
+  asset. Network-first with runtime cache: a deploy wins on the next online
+  visit, offline serves the last good load. Registered in **production
+  only** (the dev server must never fight a cache). Bump `CACHE` to force a
+  full invalidation.
+- **`viewport-fit=cover`**: the game may paint under the notch; the bottom
+  stays `SAFE_BOTTOM`'s business (real insets arrive with P7, same as
+  before).
+- **The rotate guard is a wordless glyph** (index.html): an icon, not an
+  instruction — nothing to translate, by construction. It only engages on
+  coarse-pointer devices in short-landscape, so desktop windows (always
+  landscape) never see it.
 
 ## Accessibility and quality (permanent floor)
 - `prefers-reduced-motion` honoured for screen shake and slow motion.

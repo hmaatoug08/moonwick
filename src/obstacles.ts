@@ -145,6 +145,39 @@ export class Obstacle {
     return best;
   }
 
+  /**
+   * Closest point on the obstacle's SURFACE to (px, py) — where the impact
+   * spark lands. Same shapes as distanceTo, so the spark can never appear
+   * anywhere the collision itself did not happen.
+   */
+  contactPoint(px: number, py: number): { x: number; y: number } {
+    const cx = this.container.x;
+    let best = Infinity;
+    let bx = cx;
+    let by = py;
+    for (const shape of this.shapes) {
+      let nx: number;
+      let ny: number;
+      if (shape.type === "rect") {
+        nx = Phaser.Math.Clamp(px, cx - shape.halfWidth, cx + shape.halfWidth);
+        ny = Phaser.Math.Clamp(py, shape.top, shape.bottom);
+      } else {
+        const dx = px - cx;
+        const dy = py - shape.y;
+        const len = Math.hypot(dx, dy) || 1;
+        nx = cx + (dx / len) * shape.radius;
+        ny = shape.y + (dy / len) * shape.radius;
+      }
+      const d = Math.hypot(px - nx, py - ny);
+      if (d < best) {
+        best = d;
+        bx = nx;
+        by = ny;
+      }
+    }
+    return { x: bx, y: by };
+  }
+
   /** Past the witch: no contact is possible any more (scrolling is one-way). */
   isBehind(witchX: number): boolean {
     return this.container.x + this.halfWidth < witchX;
