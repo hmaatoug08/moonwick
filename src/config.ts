@@ -1045,6 +1045,31 @@ export const ONBOARDING = {
   gapScales: [1.45, 1.2]
 } as const;
 
+/**
+ * The impact beat — death legibility, without a word. The death screen used
+ * to replace the world on the very same frame, so the player never saw WHAT
+ * killed her: the answer to "what happened?" was hidden at the exact moment
+ * the question was asked. Now the frozen world holds for `holdMs`: a cold
+ * spark at the precise contact point, the killer's moon-rim flashing bright,
+ * the witch recoiling off the branch — then the rest screen appears as
+ * before.
+ *
+ * THE REPLAY TAP IS LIVE THROUGH ALL OF IT: the hold delays pixels, never
+ * input (`onPointerDown` reads `dead`, not visibility). Tapping mid-beat
+ * restarts instantly and cancels the reveal.
+ */
+export const DEATH_FX = {
+  holdMs: 420,
+  sparks: 12,
+  /** Cold violet-white: an ending, not a reward — never gold. */
+  sparkColor: 0xd8c9ff,
+  /** The killer's rim flashes this colour for the whole beat. */
+  rimFlashColor: 0xffffff,
+  /** She recoils off what she hit — position only, the run is over. */
+  recoilPx: 12,
+  recoilMs: 340
+} as const;
+
 // First-graze celebration, strengthened with the authored opening (was
 // slowMoMs 260 / flashAlpha 0.22 / sparks 26): this is the moment the game
 // clicks, and it happens exactly once.
