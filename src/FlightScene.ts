@@ -6,6 +6,7 @@ import {
   DEBUG_HITBOX,
   DEBUG_START_TIER,
   DEBUG_STATS,
+  ECLIPSE,
   FEEDBACK,
   FIRST_GRAZE,
   FULL_MOON,
@@ -49,13 +50,13 @@ import {
 } from "./save";
 import { litOmenIds } from "./omens";
 import { hashSeed } from "./rng";
-import { ESSENCES, type Essence } from "./obstacleShapes";
+import { ESSENCES, MOON_ON_RIGHT, type Essence } from "./obstacleShapes";
 import { PerceeMarker, perceeTension } from "./percee";
 import { drawHomeIcon } from "./icons";
 import { RewardCues } from "./rewardCues";
 import { loadLifetimeStats, recordRunStats, type LifetimeStats } from "./stats";
 import { music } from "./music";
-import { addMoon, NightScenery } from "./scenery";
+import { addMoon, MOON_KEY, NightScenery } from "./scenery";
 import { Sfx } from "./sfx";
 import { ensureTextures, LIGHT_KEY, LIGHT_SIZE, SPARK_KEY } from "./textures";
 import { actionBand, fitText } from "./ui";
@@ -189,6 +190,7 @@ export class FlightScene extends Phaser.Scene {
   /** The system asks for reduced motion: no shake, no slow motion. */
   private reducedMotion = false;
   private fullMoon = false;
+  private eclipse = false;
   private readonly sfx = new Sfx();
 
   private trailEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -209,6 +211,8 @@ export class FlightScene extends Phaser.Scene {
   private moonIdleGlow!: Phaser.GameObjects.Image;
   private moonGlow!: Phaser.GameObjects.Arc;
   private moonVeil!: Phaser.GameObjects.Rectangle;
+  private eclipseShadow!: Phaser.GameObjects.Image;
+  private eclipseVeil!: Phaser.GameObjects.Rectangle;
 
   private darkness!: Phaser.GameObjects.RenderTexture;
   private lightBrush!: Phaser.GameObjects.Image;
@@ -252,6 +256,10 @@ export class FlightScene extends Phaser.Scene {
   private closestGrazeThisRun = Infinity;
   private fullMoonTimeThisRun = 0;
   private reachedFullMoonThisRun = false;
+  /** Seconds of CONTINUOUS Full Moon: the Eclipse's fuse. 0 off the cap. */
+  private fullMoonHold = 0;
+  private eclipseTimeThisRun = 0;
+  private reachedEclipseThisRun = false;
   /** Timestamps (run seconds) of recent grazes, for the grazes-per-second peak. */
   private readonly grazeTimes: number[] = [];
   private bestGrazesPerSecondThisRun = 0;
@@ -355,6 +363,15 @@ export class FlightScene extends Phaser.Scene {
     this.moon = moonPieces.moon;
     this.moonIdleGlow = moonPieces.glow;
 
+    // The Eclipse's shadow: the moon's own texture in near-sky ink, added
+    // right after the moon so it covers the face exactly while the glows
+    // (created before the moon) spill past it as a corona. Scenery, like the
+    // moon itself — under the ambient dust and the whole gameplay layer.
+    this.eclipseShadow = this.add
+      .image(MOON.x, MOON.y, MOON_KEY)
+      .setTint(ECLIPSE.shadowColor)
+      .setAlpha(0);
+
     ensureTextures(this);
 
     // Ambient dust: background scenery, under the overlay (it thins out and
@@ -429,6 +446,16 @@ export class FlightScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setDepth(DEPTH_DARKNESS);
     this.lightBrush = this.make.image({ key: LIGHT_KEY, add: false }).setOrigin(0.5);
+
+    // The Eclipse's veil: deep indigo over background and scenery ONLY, on
+    // the darkness overlay's own layer — under obstacles, halos, thread and
+    // witch, per the readability invariant. A darker sky RAISES the halos'
+    // contrast, so the invariant holds by construction.
+    this.eclipseVeil = this.add
+      .rectangle(0, 0, WORLD.width, WORLD.height, ECLIPSE.veilColor, 1)
+      .setOrigin(0, 0)
+      .setAlpha(0)
+      .setDepth(DEPTH_DARKNESS + 0.1);
 
     // Tier announcement: the place's name in serif, centred, above the veil.
     this.tierText = this.add
@@ -914,6 +941,9 @@ export class FlightScene extends Phaser.Scene {
     this.closestGrazeThisRun = Infinity;
     this.fullMoonTimeThisRun = 0;
     this.reachedFullMoonThisRun = false;
+    this.fullMoonHold = 0;
+    this.eclipseTimeThisRun = 0;
+    this.reachedEclipseThisRun = false;
     this.grazeTimes.length = 0;
     this.bestGrazesPerSecondThisRun = 0;
     this.clearedTierReached = false;
@@ -987,6 +1017,7 @@ export class FlightScene extends Phaser.Scene {
     this.cues.reset();
 
     this.setFullMoon(false, true);
+    this.setEclipse(false, true);
     this.refreshHud();
     this.refreshComboVisuals();
     this.refreshMagic();
@@ -1073,6 +1104,13 @@ export class FlightScene extends Phaser.Scene {
     if (this.bestTierThisRun === TIERS.length - 1) this.clearedTierReached = true;
 
     if (this.fullMoon) this.fullMoonTimeThisRun += dt;
+    if (this.eclipse) this.eclipseTimeThisRun += dt;
+
+    // The Eclipse's fuse: CONTINUOUS seconds at the cap, reset the instant
+    // the multiplier leaves it. Holding is the skill being measured — a
+    // timed fuse is the same feat on every tier, whatever the spawn rhythm.
+    this.fullMoonHold = this.fullMoon ? this.fullMoonHold + dt : 0;
+    this.setEclipse(this.fullMoonHold >= ECLIPSE.holdSeconds);
 
     if (this.transitionT < TIER_FX.transitionS) {
       this.transitionT = Math.min(TIER_FX.transitionS, this.transitionT + dt);
@@ -1265,6 +1303,8 @@ export class FlightScene extends Phaser.Scene {
       bestCombo: this.bestComboThisRun,
       reachedFullMoon: this.reachedFullMoonThisRun,
       fullMoonTime: this.fullMoonTimeThisRun,
+      reachedEclipse: this.reachedEclipseThisRun,
+      eclipseTime: this.eclipseTimeThisRun,
       closestGraze: this.closestGrazeThisRun,
       bestGrazesPerSecond: this.bestGrazesPerSecondThisRun,
       // Only ever true with a real record: updatePercee bails out when
@@ -1568,7 +1608,9 @@ export class FlightScene extends Phaser.Scene {
     }
   }
 
-  /** Trail + Full Moon: everything that turns the multiplier into an image. */
+  /** Trail + Full Moon: everything that turns the combo into an image. The
+   *  Eclipse is not judged here — it triggers on TIME held at the cap, in
+   *  updateDifficulty — but the trail wears its colour while it holds. */
   private refreshComboVisuals(): void {
     const t = this.comboRatio;
     const emitter = this.trailEmitter;
@@ -1580,7 +1622,9 @@ export class FlightScene extends Phaser.Scene {
     emitter.setParticleAlpha({ start: Phaser.Math.Linear(TRAIL.alphaIdle, TRAIL.alphaMax, t), end: 0 });
     const scale = Phaser.Math.Linear(TRAIL.scaleIdle, TRAIL.scaleMax, t);
     emitter.setParticleScale(scale, scale);
-    emitter.setParticleTint(lerpColor(TRAIL.colorIdle, TRAIL.colorMax, t));
+    emitter.setParticleTint(
+      this.eclipse ? ECLIPSE.trailColor : lerpColor(TRAIL.colorIdle, TRAIL.colorMax, t)
+    );
 
     this.setFullMoon(this.multiplier >= NEAR_MISS.multiplierMax);
   }
@@ -1609,6 +1653,65 @@ export class FlightScene extends Phaser.Scene {
     });
     this.tweens.add({ targets: this.moonGlow, alpha: on ? FULL_MOON.glowAlpha : 0, duration });
     this.tweens.add({ targets: this.moonVeil, alpha: on ? FULL_MOON.veilAlpha : 0, duration });
+  }
+
+  /**
+   * The Eclipse engaging or releasing. The moon is veiled to a corona, the
+   * golden veil gives way to deep indigo, and the witch becomes the light.
+   * Purely rendering + music: the multiplier stays at its cap, nothing pays
+   * differently, and no word appears. `instant` is used by the restart.
+   */
+  private setEclipse(on: boolean, instant = false): void {
+    if (this.eclipse === on && !instant) return;
+    this.eclipse = on;
+    if (on) {
+      this.reachedEclipseThisRun = true;
+      if (!instant) this.sfx.eclipse();
+    }
+
+    this.witch.setEclipse(on);
+    // The trail wears the state's colour (its shape still follows the combo).
+    this.trailEmitter.setParticleTint(
+      on ? ECLIPSE.trailColor : lerpColor(TRAIL.colorIdle, TRAIL.colorMax, this.comboRatio)
+    );
+    // The corona is the Full Moon glow strengthened and paled: same circle,
+    // hotter reading, spilling past the shadow disc that covers the face.
+    this.moonGlow.setFillStyle(on ? ECLIPSE.coronaColor : FULL_MOON.glowColor, 1);
+
+    // The shadow slides in from the moon's lit side (the same side every
+    // obstacle rim reads from) and leaves the way it came.
+    const slide = (MOON_ON_RIGHT ? 1 : -1) * ECLIPSE.shadowSlidePx;
+    const duration = instant ? 0 : on ? ECLIPSE.enterMs : ECLIPSE.exitMs;
+    this.tweens.killTweensOf([this.eclipseShadow, this.eclipseVeil]);
+    this.tweens.killTweensOf([this.moonGlow, this.moonVeil]);
+    // The golden veil only returns if Full Moon still holds (it never does on
+    // a combo break, where both states fall together — but the restart path
+    // resets eclipse after fullMoon, and the order must not matter).
+    const veilAlpha = this.fullMoon && !on ? FULL_MOON.veilAlpha : 0;
+    const glowAlpha = on ? ECLIPSE.coronaAlpha : this.fullMoon ? FULL_MOON.glowAlpha : 0;
+    if (instant) {
+      this.eclipseShadow.setAlpha(on ? ECLIPSE.shadowAlpha : 0).setX(MOON.x + (on ? 0 : slide));
+      this.eclipseVeil.setAlpha(on ? ECLIPSE.veilAlpha : 0);
+      this.moonGlow.setAlpha(glowAlpha).setScale(on ? ECLIPSE.coronaScale : 1);
+      this.moonVeil.setAlpha(veilAlpha);
+      return;
+    }
+    if (on) this.eclipseShadow.setX(MOON.x + slide);
+    this.tweens.add({
+      targets: this.eclipseShadow,
+      alpha: on ? ECLIPSE.shadowAlpha : 0,
+      x: MOON.x + (on ? 0 : slide),
+      duration,
+      ease: "Sine.easeInOut"
+    });
+    this.tweens.add({ targets: this.eclipseVeil, alpha: on ? ECLIPSE.veilAlpha : 0, duration });
+    this.tweens.add({
+      targets: this.moonGlow,
+      alpha: glowAlpha,
+      scale: on ? ECLIPSE.coronaScale : 1,
+      duration
+    });
+    this.tweens.add({ targets: this.moonVeil, alpha: veilAlpha, duration });
   }
 
   /** Flicker wave, between 0 and 1. */
@@ -1765,6 +1868,10 @@ export class FlightScene extends Phaser.Scene {
     this.updatePercee(dt, time);
     this.updateThread();
 
+    // The shadow stays glued to the moon while Full Moon's scale tween moves
+    // it — one line, always exact, cheaper than mirroring the tween.
+    if (this.eclipseShadow.alpha > 0) this.eclipseShadow.setScale(this.moon.scale);
+
     // Reward cues last: they follow the obstacles and the witch, so they read
     // this frame's positions rather than the previous one's.
     this.cues.sync(this.spawner.all);
@@ -1786,6 +1893,7 @@ export class FlightScene extends Phaser.Scene {
       tension: this.perceeT,
       crossing: this.perceeSlowMo,
       fullMoon: this.fullMoon,
+      eclipse: this.eclipse,
       tierIndex: this.tierIndex
     });
 

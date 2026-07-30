@@ -270,38 +270,49 @@ export type TierPalette = {
 /**
  * The five palettes, authored in HSL and written here as hex.
  *
- * THE ARC (hue of the sky bottom): 194 teal -> 261 violet -> 303 wine ->
- * 329 ink -> 351 plum, and on to the pale gold of the inversion (~38). One
- * direction throughout, in both MOON_EYE states.
+ * THE ARC (hue of the sky bottom): 186 teal -> 238 blue-violet -> 290 magenta
+ * -> 345 ink, and on to the pale gold of the inversion (~38). One direction
+ * throughout, in both MOON_EYE states, and the steps are EVEN: 52, 51, 55, 53.
+ *
+ * Evenness is a requirement, not a nicety. The first version of these palettes
+ * was monotone but lopsided (67, 42, 21, 74), and the two tiers with the small
+ * steps came out visually indistinguishable from the violet they replaced —
+ * measured at dE 3.9 and 5.0, i.e. barely perceptible. A monotone arc is not
+ * enough; `PALETTE_STEP_MIN` now enforces the spacing too.
  *
  * LUMINANCE IS HELD ROUGHLY CONSTANT tier to tier, and that is deliberate:
  * The Edge reads "light and luminous" through its HUE (a cool teal at the same
  * luminance reads brighter and airier than violet), not by being brighter. A
  * genuinely brighter Edge was measured first and rejected — it dropped the
  * graze halo to a contrast of 1.017, i.e. invisible, and put the sky exactly
- * on the witch's body luminance. -> DESIGN.md, "The chromatic arc".
+ * on the witch's body luminance. SATURATION is therefore what carries the
+ * difference between tiers, which is why the coloured tiers sit at 0.60-0.86.
+ * -> DESIGN.md, "The chromatic arc".
  */
 const PALETTES: Record<Tier["nameKey"], TierPalette> = {
   // Indigo above, teal below: the open, luminous end of the arc.
-  "tier.edge":     { skyTop: 0x0a141d, skyBottom: 0x10242a, sceneryTint: 0x040a12, saturation: 0.45, coolValueDrop: 0.10, haloColor: 0x9c72fe },
-  // Deep violet — the forest proper, and the game's home colour.
-  "tier.darkwood": { skyTop: 0x090616, skyBottom: 0x21113e, sceneryTint: 0x05030a, saturation: 0.57, coolValueDrop: 0.10, haloColor: 0xad66ff },
-  // Wine violet, with the warm intrusion carried by the treeline tint: the
+  "tier.edge":     { skyTop: 0x08171f, skyBottom: 0x0a2629, sceneryTint: 0x03101a, saturation: 0.60, coolValueDrop: 0.10, haloColor: 0x9d85ff },
+  // Deep blue-violet — the forest proper. Saturation 0.86: at this luminance
+  // colour is the only thing that separates it from the tier before it.
+  "tier.darkwood": { skyTop: 0x090324, skyBottom: 0x06084c, sceneryTint: 0x05030f, saturation: 0.86, coolValueDrop: 0.11, haloColor: 0xaf7aff },
+  // Magenta-wine, with the warm intrusion carried by the treeline tint: the
   // first hint that something in this forest is not cold.
-  "tier.brambles": { skyTop: 0x160718, skyBottom: 0x341132, sceneryTint: 0x2a0d08, saturation: 0.51, coolValueDrop: 0.12, haloColor: 0xd970ff },
-  // Colour drains out. Saturation 0.12 is the lowest of the five ON PURPOSE —
+  "tier.brambles": { skyTop: 0x240321, skyBottom: 0x3a0545, sceneryTint: 0x2a0d08, saturation: 0.86, coolValueDrop: 0.12, haloColor: 0xce85ff },
+  // Colour drains out. Saturation 0.10 is the lowest of the five ON PURPOSE —
   // the Wall is where the forest stops having a colour — which is exactly why
   // its coolValueDrop is the highest: the combo loss has to be paid in
-  // brightness because there is no saturation left to spend.
-  "tier.wall":     { skyTop: 0x080708, skyBottom: 0x181316, sceneryTint: 0x050406, saturation: 0.12, coolValueDrop: 0.34, haloColor: 0xf899ff },
-  // Deep plum: the FALLBACK sky, used only if MOON_EYE.enabled is turned off.
-  // With the inversion on (the default) the sky is MOON_EYE's pale gold and
-  // this is never drawn — but it still has to keep the arc monotone, and it
-  // has to stay dark so the light-on-dark HUD remains readable without the
-  // inversion's flip. coolValueDrop 0 here: on pale gold the cooling already
-  // reads as a huge hue swing (dS 0.18), and darkening it would eat the
-  // contrast of MOON_EYE's dark rim.
-  "tier.moonEye":  { skyTop: 0x190d10, skyBottom: 0x412327, sceneryTint: 0x1a0f08, saturation: 0.30, coolValueDrop: 0.00, haloColor: 0xffa3ff }
+  // brightness because there is no saturation left to spend. It is also pinned
+  // DARK: being the blackest tier is half of how it reads, so it is the one
+  // palette that must not chase a bigger colour difference.
+  "tier.wall":     { skyTop: 0x0a0808, skyBottom: 0x151112, sceneryTint: 0x050406, saturation: 0.10, coolValueDrop: 0.34, haloColor: 0xeb99ff },
+  // Deep warm plum: the FALLBACK sky, used only if MOON_EYE.enabled is turned
+  // off. With the inversion on (the default) the sky is MOON_EYE's pale gold
+  // and this is never drawn — but it still has to keep the AUTHORED arc
+  // monotone past the Wall, and it has to stay dark so the light-on-dark HUD
+  // remains readable without the inversion's flip. coolValueDrop 0 here: on
+  // pale gold the cooling already reads as a huge hue swing (dS 0.18), and
+  // darkening it would eat the contrast of MOON_EYE's dark rim (4.52 -> 3.69).
+  "tier.moonEye":  { skyTop: 0x190f0d, skyBottom: 0x412a23, sceneryTint: 0x1a0f08, saturation: 0.30, coolValueDrop: 0.00, haloColor: 0xffa3ff }
 };
 
 export const TIERS: readonly Tier[] = [
@@ -927,6 +938,47 @@ export const FULL_MOON = {
 } as const;
 
 /**
+ * The Eclipse — the prestige state ABOVE Full Moon (-> DESIGN.md, "The
+ * Eclipse"). Reached by HOLDING the cap: `holdSeconds` of continuous Full
+ * Moon, timed, not counted in grazes — the same feat on every tier whatever
+ * the spawn rhythm. It falls with the combo, whole, and pays NOTHING: the
+ * multiplier stays x5 and no score changes. What it grants is the state itself — the
+ * moon veiled to a corona, the witch become the light, a shimmer over the
+ * music — plus a lifetime count on the Scores page. WORDLESS during play.
+ *
+ * READABILITY: the eclipse veil only touches background and scenery (drawn at
+ * the darkness overlay's depth, under obstacles, halos, thread and witch). A
+ * darker sky RAISES halo contrast, so the invariant holds by construction;
+ * the assertion below keeps the stacked veils off true black.
+ */
+export const ECLIPSE = {
+  /** Seconds of CONTINUOUS Full Moon before the moon is veiled. The count
+   *  resets the instant the multiplier leaves the cap. */
+  holdSeconds: 6,
+  /** The shadow's slide across the moon face. */
+  enterMs: 900,
+  /** The release: the moon returns faster than it was veiled. */
+  exitMs: 420,
+  /** Horizontal start offset of the shadow disc, moon-side, in px. */
+  shadowSlidePx: 26,
+  /** The shadow: the moon's own texture in near-sky ink. */
+  shadowColor: 0x120b26,
+  shadowAlpha: 0.96,
+  /** The corona: the idle glow strengthened, warm white — reward, not death. */
+  coronaColor: 0xfff1c8,
+  coronaAlpha: 0.5,
+  coronaScale: 1.35,
+  /** Deep-indigo veil over background and scenery ONLY (normal blend). */
+  veilColor: 0x0a0618,
+  veilAlpha: 0.26,
+  /** The witch becomes the light: hot white-gold, brighter than Full Moon. */
+  witchColor: 0xfff2d0,
+  witchRim: 0xfff7e6,
+  witchAura: 0xffe9b8,
+  trailColor: 0xffedc2
+} as const;
+
+/**
  * Sounds synthesised with Web Audio, no external files (P4 rule).
  * Volume deliberately low: the game is often played muted and must never
  * startle. `masterVolume` is the only knob to touch.
@@ -950,7 +1002,12 @@ export const SFX = {
   /** Percée approach: the swoosh detunes down by this much at full tension. */
   tensionDetuneCents: -260,
   /** Close graze: the swoosh peak rises by this factor — sharper, not louder. */
-  closeSharpen: 1.3
+  closeSharpen: 1.3,
+  /** Eclipse entry: one soft low bell, two partials, long decay. Once. */
+  eclipseBellHz: 220,
+  eclipseBellPartialRatio: 1.5,
+  eclipseBellMs: 1400,
+  eclipseBellGain: 0.7
 } as const;
 
 /**
@@ -1028,6 +1085,14 @@ export const MUSIC = {
   melodyDecayS: 0.7,
   melodyOctave: 3,
   melodyDensity: 0.45,
+
+  // SHIMMER, Eclipse only: a standing high pair (octave + twelfth over the
+  // pad's root) that fades in like every other layer, and the melody lifts
+  // one octave while it holds. The rarest state gets the thinnest voice —
+  // air, not fanfare.
+  shimmerGain: 0.16,
+  shimmerMults: [4, 6],
+  shimmerMelodyLift: 1,
 
   /** Percée approach: fraction of the bed removed at the marker. The
    *  slow-motion crossing itself silences the music entirely. */
@@ -1470,6 +1535,29 @@ if (import.meta.env.DEV) {
   }
 }
 
+// --- Guard rail (dev only): the Eclipse sits STRICTLY above Full Moon.
+// It must ask for a real HOLD on top of reaching the cap, or "above Full
+// Moon" silently becomes "at Full Moon" the day someone retunes it.
+if (import.meta.env.DEV) {
+  if (ECLIPSE.holdSeconds <= 0) {
+    throw new Error(
+      `ECLIPSE.holdSeconds ${ECLIPSE.holdSeconds} must be > 0: the Eclipse ` +
+        `is the state ABOVE Full Moon — earned by holding the cap — never a ` +
+        `synonym for reaching it.`
+    );
+  }
+  // The eclipse veil stacks with the combo-loss darkness while the timer
+  // drains between grazes. Both only touch background and scenery, but the
+  // scenery must stay faintly present — the forest goes deep, never void.
+  if (ECLIPSE.veilAlpha + MAGIC.darkAlphaEmpty > 0.8) {
+    throw new Error(
+      `ECLIPSE.veilAlpha ${ECLIPSE.veilAlpha} + MAGIC.darkAlphaEmpty ` +
+        `${MAGIC.darkAlphaEmpty} exceed 0.8: stacked, the scenery would drop ` +
+        `to true black. Lower one of them.`
+    );
+  }
+}
+
 /**
  * Palette contrast floor — the number the dev assertion below enforces.
  *
@@ -1485,6 +1573,20 @@ if (import.meta.env.DEV) {
  * with 1.159 at their worst (The Dark Wood, top, cooled).
  */
 export const HALO_CONTRAST_MIN = 1.14;
+
+/**
+ * Minimum hue step between two consecutive tiers, in degrees, on the EFFECTIVE
+ * skies (the ones the player sees).
+ *
+ * Monotonicity alone is not enough, and that was learned the hard way: the
+ * first version of the palettes advanced in one direction but unevenly (67, 42,
+ * 21, 74 degrees), and the two tiers on the small steps came out at dE 3.9 and
+ * 5.0 against the violet they replaced — a change nobody could see. "One
+ * palette per tier" means the tiers must be TELLABLE APART, so the spacing is
+ * a constraint in its own right. The shipped arc clears this with 43 degrees at
+ * its narrowest.
+ */
+export const PALETTE_STEP_MIN = 30;
 
 // --- Guard rail (dev only): every palette must keep its graze halo readable,
 // and the hue arc must not double back.
@@ -1563,6 +1665,20 @@ if (import.meta.env.DEV) {
               `luminance away from it.`
           );
         }
+        // The same floor under the Eclipse veil: an Eclipse can hold on any
+        // tier, in any light, and the halo must survive it everywhere. The
+        // veil only darkens, which RAISES contrast on the dark palettes —
+        // this check exists for the day a palette or the veil goes light.
+        const eclipsedBg = composite(ECLIPSE.veilColor, bg, ECLIPSE.veilAlpha);
+        const seenEclipsed = ratio(composite(halo, eclipsedBg, alpha), eclipsedBg);
+        if (seenEclipsed < HALO_CONTRAST_MIN) {
+          throw new Error(
+            `TIERS "${tier.nameKey}": the graze halo drops below the contrast floor ` +
+              `under the Eclipse veil — ${seenEclipsed.toFixed(3)} at the ${where} of ` +
+              `the gradient (${light}), floor ${HALO_CONTRAST_MIN}. Adjust ` +
+              `ECLIPSE.veilColor/veilAlpha or the palette's halo.`
+          );
+        }
       }
     }
   }
@@ -1581,6 +1697,18 @@ if (import.meta.env.DEV) {
             `"${TIERS[i - 1].nameKey}" to "${TIERS[i].nameKey}" is ${step.toFixed(0)} degrees. ` +
             `Each step must advance in the same direction and stay under 140, or the ` +
             `sky interpolation crosses a muddy neutral on the way.`
+        );
+      }
+      // ...and the steps must be EVENLY spread, not merely all forward. A
+      // monotone but lopsided arc shipped once: the tiers on its 21-degree step
+      // were indistinguishable from the sky they replaced (dE 3.9 and 5.0), so
+      // "a palette per tier" quietly bought nothing on two tiers out of five.
+      if (step < PALETTE_STEP_MIN) {
+        throw new Error(
+          `TIERS palette arc (${band} of the gradient): the step from ` +
+            `"${TIERS[i - 1].nameKey}" to "${TIERS[i].nameKey}" is only ${step.toFixed(0)} ` +
+            `degrees, under PALETTE_STEP_MIN (${PALETTE_STEP_MIN}). Those two tiers will look ` +
+            `like the same sky. Spread the hues, or drop one of the two palettes.`
         );
       }
       sweep += step;

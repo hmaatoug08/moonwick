@@ -86,6 +86,7 @@ const PAGES: Page[] = [
         { label: t("scores.playTime"), value: duration(s.totalPlayTime) },
         { label: t("scores.grazes"), value: String(s.totalGrazes) },
         { label: t("scores.fullMoons"), value: String(s.fullMoons) },
+        { label: t("scores.eclipses"), value: String(s.eclipses) },
         {
           label: t("scores.closestGraze"),
           value: Number.isFinite(s.closestGraze)

@@ -138,6 +138,36 @@ export class Sfx {
   }
 
   /**
+   * The Eclipse engaging: one soft low bell, two partials, long decay. It
+   * fires at most once per combo — the shimmer layer and the visuals carry
+   * the state; this only marks the instant it begins.
+   */
+  eclipse(): void {
+    if (!isSoundEnabled()) return;
+    const ctx = this.ensureContext();
+    if (!ctx || !this.master || ctx.state !== "running") return;
+
+    const now = ctx.currentTime;
+    const duration = SFX.eclipseBellMs / 1000;
+
+    for (const ratio of [1, SFX.eclipseBellPartialRatio]) {
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(SFX.eclipseBellHz * ratio, now);
+
+      const gain = ctx.createGain();
+      const peak = SFX.eclipseBellGain / ratio;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(peak, now + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+      osc.connect(gain).connect(this.master);
+      osc.start(now);
+      osc.stop(now + duration + 0.02);
+    }
+  }
+
+  /**
    * Firefly pickup: a short crystalline chime. Two sine partials and a fast
    * decay — it fires on every graze, so it has to sit under the swoosh rather
    * than compete with it.

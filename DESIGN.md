@@ -496,6 +496,46 @@ inside the same family. The dev assertion caps a step at 140° and the whole
 sweep at 260°, so the next palette someone authors cannot quietly reintroduce
 the long way round.
 
+### Monotone was not enough: the steps have to be spread
+
+The first version of these palettes advanced in one direction and passed every
+assertion — and two tiers out of five still looked exactly like the violet they
+replaced. Measured against the original sky: The Dark Wood **ΔE 3.9**, The
+Brambles **ΔE 5.0**. Below about 2.3 a difference is imperceptible; at 4 it is
+"maybe, side by side, on a good screen". In a game played on a phone at night,
+that is nothing. The Moon's Eye, meanwhile, was ΔE **0.0** — unchanged by
+construction, since `MOON_EYE` supplies its sky and the palette holds only the
+fallback.
+
+The cause was distribution, not direction. The arc ran 194 -> 261 -> 303 -> 324
+on the bottoms: steps of 67, 42 and **21** degrees, and 43, 42 and **7** on the
+tops. Two tiers sharing a 7-degree step are the same colour. The assertion
+checked that every step was forward and under 140; nobody had asked whether the
+steps were *even*, so the lopsidedness was invisible to it.
+
+The fix was to re-spread rather than to nudge: an even arc (52, 51, 55, 53
+degrees) chosen by searching for the set that maximises the worst of "adjacent
+tiers differ" and "each tier differs from what it replaced", subject to every
+existing invariant. Results, bottoms, in ΔE:
+
+| | adjacent separation | vs the original sky |
+| --- | --- | --- |
+| before | 32.9 / 12.6 / 24.2 / 61.0 | 33.3 / 3.9 / 5.0 / 14.1 / 0.0 |
+| after | **51.2 / 17.0 / 42.3 / 61.4** | **36.6 / 19.0 / 19.6 / 15.7 / 0.0** |
+
+`PALETTE_STEP_MIN` (30°) now enforces the spacing on the effective skies, and it
+was verified to reject the arc that shipped.
+
+Two constraints shaped the search as much as the objective did. **Saturation had
+to do the work**, because luminance is pinned (see below) — hence 0.60-0.86 on
+the coloured tiers, up from 0.45-0.57. And **the halo had to stay violet**: the
+unconstrained search happily proposed an orange halo for The Wall, which would
+have read as a reward colour and broken both the Affordance rule ("a translucent
+violet halo") and the gold rationing. The Wall was also pinned dark rather than
+allowed to brighten for a bigger ΔE: being the blackest tier is half of how it
+reads, which is why it is the one palette that still measures only ΔE 15.7
+against the original and is fine that way — it is 42.3 from its neighbour.
+
 The order the tiers happen to want — teal, violet, wine, ink, gold — is why the
 direction is forced rather than chosen. The Wall was specified as "blue-black",
 and blue would have meant going *back* from the Brambles' wine. It is a
@@ -665,6 +705,7 @@ input it listens to already has a visual voice, and the mapping is the same:
 | multiplier     | trail density, brightness   | rhythm density, filter opens  |
 | combo lost     | scenery cools, desaturates  | layers retreat, filter closes, the air rises |
 | Full Moon      | golden veil, blazing trail  | melody enters                 |
+| Eclipse        | moon veiled to a corona, the witch is the light | shimmer enters, melody lifts an octave |
 | Percée approach| scenery desaturates         | the bed hollows out (duck)    |
 | crossing       | slow motion owns the screen | silence — the music steps aside |
 
@@ -845,3 +886,85 @@ INPUT and the death-screen content, and both still are.
 420 ms is deliberate: long enough to read one spark and one flash, shorter
 than the shortest anger. Players who tap through it lose nothing — the
 information was for the ones who paused.
+
+### The Eclipse — the state above Full Moon
+
+Full Moon was a ceiling with nothing behind it: the multiplier caps at x5 on
+the eighth chained graze, and the ninth felt identical to the eighth. For
+the players the whole game is built for — the ones who hold the cap for ten,
+twenty seconds — the climax went flat exactly where their skill kept
+climbing. The Eclipse is what stands above it: HOLD the cap for
+`ECLIPSE.holdSeconds` (6) of continuous Full Moon and the moon is veiled.
+
+**The trigger is timed, not counted.** A graze count was considered and
+rejected: the spawn interval shrinks tier by tier, so "four more grazes"
+is a faster feat on The Wall than on The Edge, and the state above the
+game's climax must mean the same thing everywhere. Holding is also the
+actual skill being measured — the combo timer only survives at the cap
+through relentless grazing, so a timed fuse counts the grazes implicitly,
+weighted exactly the way the game itself weighs them. The fuse resets the
+instant the multiplier leaves x5: an Eclipse is one unbroken hold, never
+an accumulation.
+
+**It pays nothing, on purpose.** The multiplier stays x5, grazes score
+exactly what they scored, and no number anywhere changes. Three precedents
+converged on this and none of them bent: the omens are purely commemorative,
+La Percée is purely visual, and the perfect graze deliberately refused a
+third pay tier because "a third readable difference no one would parse at
+260 px/s" is not a reward. What the Eclipse grants is the state itself, plus
+one line on the Scores page (`eclipses`, `eclipseTime` — the tolerant stats
+fields, per the omens' growth rule). Prestige is the correct currency for
+the top of the ladder: past x5 the score is already climbing as fast as the
+game allows; what the player holding the cap wants is for the game to
+*know*. And it is never a shield — one mistake still kills, unchanged.
+
+**The image is an inversion of light.** At Full Moon the moon blazes and the
+world turns gold. At the Eclipse the moon goes dark — a disc of near-sky ink
+(the moon's own texture, so the cover is exact by construction) slides over
+the face, leaving the strengthened glow spilling past its edge as a corona —
+and the WITCH becomes the brightest light in the frame: body, rim, aura and
+trail lift to hot white-gold, a notch past the Full Moon tint. She spent the
+whole game charging her magic on the moon's light; at the top of the chain
+she outshines it. The corona and the witch stay in the GOLD register —
+reward language — which is what keeps the Eclipse legible against the death
+spark's cold violet-white: both darken the world, but one glitters warm.
+
+**The readability invariant decided the architecture.** The eclipse veil is
+deep indigo at `veilAlpha` 0.26, normal blend, drawn on the darkness
+overlay's own layer — under obstacles, halos, thread and witch. Darkening
+only the background *raises* the halos' contrast (the composited-halo floor
+is measured against the bare sky beside it), so the invariant holds by
+construction rather than by tuning — and it is still ASSERTED, not assumed:
+the palette check also composites every tier sky under the Eclipse veil,
+both gradient ends, lit and cooled, against the same `HALO_CONTRAST_MIN`
+floor, for the day a palette or the veil goes light. The one real risk is stacking: the
+combo timer keeps draining between grazes even inside an Eclipse, so the
+combo-loss darkness (up to 0.5) and the eclipse veil can sit on the scenery
+together. A dev assertion caps their sum at 0.8 — the forest goes deep,
+never void.
+
+**Falling is one piece.** The Eclipse ends only when the combo ends: the
+timer hits zero, both states fall together in one release (the shadow slides
+back out in `exitMs` 420 ms, faster than it came — the world exhales), or
+the run ends and the impact beat freezes the eclipsed world as-is, which is
+the most dramatic frame the death screen will ever inherit. There is no
+half-eclipse and no decay ladder: a state this rare must be binary to stay
+legible.
+
+**Wordless, and not a tier.** No text announces it — the two allowed
+non-numeric strings (tier names, `percee`) stay exactly two. The name
+"Eclipse" exists only on the Scores page, where words are allowed. In the
+music it enters the way every state does, as a layer: a standing SHIMMER
+pair (octave + twelfth over the pad's root, riding the same tier glide)
+fades in over everything, the melody's seeded walk lifts one octave — the
+same tune, thinner air — and one soft low bell marks the instant it engages.
+The mapping table gains a row: eyes see the moon veiled and the witch
+alight; ears hear the shimmer. Nothing new is *said*; the register rises.
+
+**Interactions it deliberately does not have.** Nothing in generation,
+difficulty, MERCY or the daily reads the eclipse flag — a daily flight can
+eclipse, and everyone's course is still identical, because the state is
+cosmetic by charter. Under The Moon's Eye inversion the veil simply darkens
+the pale-gold sky a step (0.26 cannot flip its polarity), and the inverted
+HUD keeps its colours: the sky stays the HUD's business, and the HUD yields,
+never the palette.

@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { FULL_MOON, NEAR_MISS, WITCH_ART } from "./config";
+import { ECLIPSE, FULL_MOON, NEAR_MISS, WITCH_ART } from "./config";
 import { MOON_ON_RIGHT } from "./obstacleShapes";
 import { LIGHT_KEY } from "./textures";
 
@@ -277,6 +277,7 @@ export class Witch {
   private grazeKickLeft = 0;
   private grazeKickDir = 0;
   private fullMoon = false;
+  private eclipse = false;
   private comboRatio = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, depth: number) {
@@ -358,9 +359,29 @@ export class Witch {
 
   setFullMoon(on: boolean): this {
     this.fullMoon = on;
-    this.bodyImg.setTint(on ? FULL_MOON.witchColor : WITCH_ART.bodyColor);
-    this.rimImg.setTint(on ? WITCH_ART.rimColorFullMoon : WITCH_ART.rimColor);
-    this.aura.setTint(on ? WITCH_ART.auraColorFullMoon : WITCH_ART.auraColor);
+    return this.applyStateTints();
+  }
+
+  /**
+   * The Eclipse: the moon goes dark and SHE becomes the light — hot
+   * white-gold, a notch brighter than Full Moon. Only the run scene ever
+   * sets this; the menu and death-screen witches never eclipse.
+   */
+  setEclipse(on: boolean): this {
+    this.eclipse = on;
+    return this.applyStateTints();
+  }
+
+  private applyStateTints(): this {
+    this.bodyImg.setTint(
+      this.eclipse ? ECLIPSE.witchColor : this.fullMoon ? FULL_MOON.witchColor : WITCH_ART.bodyColor
+    );
+    this.rimImg.setTint(
+      this.eclipse ? ECLIPSE.witchRim : this.fullMoon ? WITCH_ART.rimColorFullMoon : WITCH_ART.rimColor
+    );
+    this.aura.setTint(
+      this.eclipse ? ECLIPSE.witchAura : this.fullMoon ? WITCH_ART.auraColorFullMoon : WITCH_ART.auraColor
+    );
     return this;
   }
 
@@ -383,6 +404,7 @@ export class Witch {
     this.bodyImg.setRotation(0);
     this.rimImg.setRotation(0);
     this.setAlpha(1);
+    this.eclipse = false;
     this.setFullMoon(false);
     const cape = this.local(WITCH_METRICS.capeAnchor, 0);
     const hat = this.local(WITCH_METRICS.hatAnchor, 0);
@@ -451,8 +473,16 @@ export class Witch {
   private redraw(): void {
     const g = this.cloth;
     g.clear();
-    const bodyColor = this.fullMoon ? FULL_MOON.witchColor : WITCH_ART.bodyColor;
-    const rimColor = this.fullMoon ? WITCH_ART.rimColorFullMoon : WITCH_ART.rimColor;
+    const bodyColor = this.eclipse
+      ? ECLIPSE.witchColor
+      : this.fullMoon
+        ? FULL_MOON.witchColor
+        : WITCH_ART.bodyColor;
+    const rimColor = this.eclipse
+      ? ECLIPSE.witchRim
+      : this.fullMoon
+        ? WITCH_ART.rimColorFullMoon
+        : WITCH_ART.rimColor;
 
     const capeAnchor = this.local(WITCH_METRICS.capeAnchor, this.tilt);
     const hatAnchor = this.local(WITCH_METRICS.hatAnchor, this.tilt);
