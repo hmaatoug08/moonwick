@@ -270,38 +270,49 @@ export type TierPalette = {
 /**
  * The five palettes, authored in HSL and written here as hex.
  *
- * THE ARC (hue of the sky bottom): 194 teal -> 261 violet -> 303 wine ->
- * 329 ink -> 351 plum, and on to the pale gold of the inversion (~38). One
- * direction throughout, in both MOON_EYE states.
+ * THE ARC (hue of the sky bottom): 186 teal -> 238 blue-violet -> 290 magenta
+ * -> 345 ink, and on to the pale gold of the inversion (~38). One direction
+ * throughout, in both MOON_EYE states, and the steps are EVEN: 52, 51, 55, 53.
+ *
+ * Evenness is a requirement, not a nicety. The first version of these palettes
+ * was monotone but lopsided (67, 42, 21, 74), and the two tiers with the small
+ * steps came out visually indistinguishable from the violet they replaced —
+ * measured at dE 3.9 and 5.0, i.e. barely perceptible. A monotone arc is not
+ * enough; `PALETTE_STEP_MIN` now enforces the spacing too.
  *
  * LUMINANCE IS HELD ROUGHLY CONSTANT tier to tier, and that is deliberate:
  * The Edge reads "light and luminous" through its HUE (a cool teal at the same
  * luminance reads brighter and airier than violet), not by being brighter. A
  * genuinely brighter Edge was measured first and rejected — it dropped the
  * graze halo to a contrast of 1.017, i.e. invisible, and put the sky exactly
- * on the witch's body luminance. -> DESIGN.md, "The chromatic arc".
+ * on the witch's body luminance. SATURATION is therefore what carries the
+ * difference between tiers, which is why the coloured tiers sit at 0.60-0.86.
+ * -> DESIGN.md, "The chromatic arc".
  */
 const PALETTES: Record<Tier["nameKey"], TierPalette> = {
   // Indigo above, teal below: the open, luminous end of the arc.
-  "tier.edge":     { skyTop: 0x0a141d, skyBottom: 0x10242a, sceneryTint: 0x040a12, saturation: 0.45, coolValueDrop: 0.10, haloColor: 0x9c72fe },
-  // Deep violet — the forest proper, and the game's home colour.
-  "tier.darkwood": { skyTop: 0x090616, skyBottom: 0x21113e, sceneryTint: 0x05030a, saturation: 0.57, coolValueDrop: 0.10, haloColor: 0xad66ff },
-  // Wine violet, with the warm intrusion carried by the treeline tint: the
+  "tier.edge":     { skyTop: 0x08171f, skyBottom: 0x0a2629, sceneryTint: 0x03101a, saturation: 0.60, coolValueDrop: 0.10, haloColor: 0x9d85ff },
+  // Deep blue-violet — the forest proper. Saturation 0.86: at this luminance
+  // colour is the only thing that separates it from the tier before it.
+  "tier.darkwood": { skyTop: 0x090324, skyBottom: 0x06084c, sceneryTint: 0x05030f, saturation: 0.86, coolValueDrop: 0.11, haloColor: 0xaf7aff },
+  // Magenta-wine, with the warm intrusion carried by the treeline tint: the
   // first hint that something in this forest is not cold.
-  "tier.brambles": { skyTop: 0x160718, skyBottom: 0x341132, sceneryTint: 0x2a0d08, saturation: 0.51, coolValueDrop: 0.12, haloColor: 0xd970ff },
-  // Colour drains out. Saturation 0.12 is the lowest of the five ON PURPOSE —
+  "tier.brambles": { skyTop: 0x240321, skyBottom: 0x3a0545, sceneryTint: 0x2a0d08, saturation: 0.86, coolValueDrop: 0.12, haloColor: 0xce85ff },
+  // Colour drains out. Saturation 0.10 is the lowest of the five ON PURPOSE —
   // the Wall is where the forest stops having a colour — which is exactly why
   // its coolValueDrop is the highest: the combo loss has to be paid in
-  // brightness because there is no saturation left to spend.
-  "tier.wall":     { skyTop: 0x080708, skyBottom: 0x181316, sceneryTint: 0x050406, saturation: 0.12, coolValueDrop: 0.34, haloColor: 0xf899ff },
-  // Deep plum: the FALLBACK sky, used only if MOON_EYE.enabled is turned off.
-  // With the inversion on (the default) the sky is MOON_EYE's pale gold and
-  // this is never drawn — but it still has to keep the arc monotone, and it
-  // has to stay dark so the light-on-dark HUD remains readable without the
-  // inversion's flip. coolValueDrop 0 here: on pale gold the cooling already
-  // reads as a huge hue swing (dS 0.18), and darkening it would eat the
-  // contrast of MOON_EYE's dark rim.
-  "tier.moonEye":  { skyTop: 0x190d10, skyBottom: 0x412327, sceneryTint: 0x1a0f08, saturation: 0.30, coolValueDrop: 0.00, haloColor: 0xffa3ff }
+  // brightness because there is no saturation left to spend. It is also pinned
+  // DARK: being the blackest tier is half of how it reads, so it is the one
+  // palette that must not chase a bigger colour difference.
+  "tier.wall":     { skyTop: 0x0a0808, skyBottom: 0x151112, sceneryTint: 0x050406, saturation: 0.10, coolValueDrop: 0.34, haloColor: 0xeb99ff },
+  // Deep warm plum: the FALLBACK sky, used only if MOON_EYE.enabled is turned
+  // off. With the inversion on (the default) the sky is MOON_EYE's pale gold
+  // and this is never drawn — but it still has to keep the AUTHORED arc
+  // monotone past the Wall, and it has to stay dark so the light-on-dark HUD
+  // remains readable without the inversion's flip. coolValueDrop 0 here: on
+  // pale gold the cooling already reads as a huge hue swing (dS 0.18), and
+  // darkening it would eat the contrast of MOON_EYE's dark rim (4.52 -> 3.69).
+  "tier.moonEye":  { skyTop: 0x190f0d, skyBottom: 0x412a23, sceneryTint: 0x1a0f08, saturation: 0.30, coolValueDrop: 0.00, haloColor: 0xffa3ff }
 };
 
 export const TIERS: readonly Tier[] = [
@@ -1478,6 +1489,20 @@ if (import.meta.env.DEV) {
  */
 export const HALO_CONTRAST_MIN = 1.14;
 
+/**
+ * Minimum hue step between two consecutive tiers, in degrees, on the EFFECTIVE
+ * skies (the ones the player sees).
+ *
+ * Monotonicity alone is not enough, and that was learned the hard way: the
+ * first version of the palettes advanced in one direction but unevenly (67, 42,
+ * 21, 74 degrees), and the two tiers on the small steps came out at dE 3.9 and
+ * 5.0 against the violet they replaced — a change nobody could see. "One
+ * palette per tier" means the tiers must be TELLABLE APART, so the spacing is
+ * a constraint in its own right. The shipped arc clears this with 43 degrees at
+ * its narrowest.
+ */
+export const PALETTE_STEP_MIN = 30;
+
 // --- Guard rail (dev only): every palette must keep its graze halo readable,
 // and the hue arc must not double back.
 //
@@ -1573,6 +1598,18 @@ if (import.meta.env.DEV) {
             `"${TIERS[i - 1].nameKey}" to "${TIERS[i].nameKey}" is ${step.toFixed(0)} degrees. ` +
             `Each step must advance in the same direction and stay under 140, or the ` +
             `sky interpolation crosses a muddy neutral on the way.`
+        );
+      }
+      // ...and the steps must be EVENLY spread, not merely all forward. A
+      // monotone but lopsided arc shipped once: the tiers on its 21-degree step
+      // were indistinguishable from the sky they replaced (dE 3.9 and 5.0), so
+      // "a palette per tier" quietly bought nothing on two tiers out of five.
+      if (step < PALETTE_STEP_MIN) {
+        throw new Error(
+          `TIERS palette arc (${band} of the gradient): the step from ` +
+            `"${TIERS[i - 1].nameKey}" to "${TIERS[i].nameKey}" is only ${step.toFixed(0)} ` +
+            `degrees, under PALETTE_STEP_MIN (${PALETTE_STEP_MIN}). Those two tiers will look ` +
+            `like the same sky. Spread the hues, or drop one of the two palettes.`
         );
       }
       sweep += step;
