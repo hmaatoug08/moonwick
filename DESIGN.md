@@ -323,6 +323,47 @@ The glyphs speak the interface-icon vocabulary (dark mass, moon-side light,
 bordered boxes — rule one), and answer to the same bottom limit as the row
 pages, enforced by the same style of boot assertion.
 
+### The bridge (a playtest amendment)
+
+The first shipped version announced nothing anywhere: earn an omen, and
+unless you happened to open the page you would never learn it existed. The
+playtest verdict was immediate — the reveal is the collection's whole
+payoff, and the game's core loop is *built* to never pass through the
+Scores page, so the payoff was structurally missable.
+
+Two stronger fixes were considered and rejected. An **in-run announcement**
+fails on attention (the moment you earn the needle you are, by definition,
+3 px from death) and on redundancy — nearly every omen deed already has its
+in-run celebration: the needle its flash, Full Moon its veil, the Percée
+its burst. The feeling is delivered at the moment; what was missing was
+only the bridge to the page. A **death-screen list of earned omens** is the
+exact regression the five-things rule exists to prevent — the screen was
+cut back once precisely because things kept accreting onto it.
+
+So the bridge is two quiet layers, and a closed list:
+
+- **The death line carries it.** The screen already owns one sentence whose
+  charter is "say what happened, give a reason to go again" — and a new
+  omen IS what happened. The `newOmen` category fires when this run's deeds
+  lit one: whole templates in four languages, no sixth element, no delay,
+  and at most twelve firings in a player's whole life, so it never wears
+  out. It ranks just under `newRecord` (rarer than every time band, but a
+  record is bigger news and its own line is better). Event-indexed where
+  the others are time-indexed — the one exception, accepted because the
+  event is rarer than any threshold the bands could express.
+- **The trail to the page glows.** A small gold spark beside the home
+  screen's Scores label while a lit omen has never been revealed, breathing
+  slowly (a coal, not a LED), and the Scores page opens directly on the
+  Omens tab in that state so the reveal shimmer cannot hide behind
+  Records. Gold, because it points at a reward; wordless, like every icon.
+
+Both layers say only *that* a sign waits — never which, never how many.
+The moment a pointer names an omen outside the page, the name stops being
+part of the reward and the riddle posture collapses; that is why the rule
+in CLAUDE.md is a closed list rather than a tone guideline. Discovery
+still happens on purpose, in the reading room — the game now just admits
+there is something to read.
+
 ---
 
 ## The progress thread, bottom edge

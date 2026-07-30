@@ -2,8 +2,8 @@ import Phaser from "phaser";
 import { GRAZE_TIERS, OBSTACLE_ART, OMENS, TIERS, WITCH_ART } from "./config";
 import type { StringKey } from "./i18n";
 import { MOON_ON_RIGHT } from "./obstacleShapes";
-import { readRaw, writeRaw } from "./save";
-import type { LifetimeStats } from "./stats";
+import { loadStats, readRaw, writeRaw } from "./save";
+import { loadLifetimeStats, type LifetimeStats } from "./stats";
 
 /**
  * The omens — twelve signs the forest gives, shown on the Scores page.
@@ -367,4 +367,24 @@ export function markOmensSeen(ids: Iterable<string>): void {
   const seen = loadOmensSeen();
   for (const id of ids) seen.add(id);
   writeRaw("omensSeen", JSON.stringify([...seen]));
+}
+
+/** Ids of every omen the given deeds light. Pure, like the predicates. */
+export function litOmenIds(s: LifetimeStats, bestCombo: number): string[] {
+  return OMEN_LIST.filter((omen) => omen.isLit(s, bestCombo)).map((omen) => omen.id);
+}
+
+/**
+ * True while a lit omen has never been revealed on the Scores page.
+ *
+ * This is the ONE fact the bridge surfaces are allowed to know (the home
+ * row's glint, the Scores page opening on the Omens tab): that something
+ * waits — never which omen, never how many. Derived on every call, exactly
+ * like lit-or-not itself.
+ */
+export function hasUnseenOmens(): boolean {
+  const stats = loadLifetimeStats();
+  const lit = litOmenIds(stats, Math.max(stats.bestCombo, loadStats().bestCombo));
+  const seen = loadOmensSeen();
+  return lit.some((id) => !seen.has(id));
 }

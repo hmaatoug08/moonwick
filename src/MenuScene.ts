@@ -9,6 +9,7 @@ import {
   MERCY,
   LOGO,
   NEAR_MISS,
+  OMENS,
   OBSTACLE_ART,
   SAFE_BOTTOM,
   SCENERY,
@@ -19,6 +20,7 @@ import {
   WORLD
 } from "./config";
 import { drawBookIcon } from "./icons";
+import { hasUnseenOmens } from "./omens";
 import { MOON_ON_RIGHT } from "./obstacleShapes";
 import { Witch } from "./witchShape";
 import { getLanguage, LANG_NAMES, LANGS, Lang, onLanguageChange, setLanguage, t } from "./i18n";
@@ -95,6 +97,7 @@ export class MenuScene extends Phaser.Scene {
   private scoresIcon!: Phaser.GameObjects.Graphics;
   private scoresLabel!: Phaser.GameObjects.Text;
   private scoresChevron!: Phaser.GameObjects.Text;
+  private scoresGlint!: Phaser.GameObjects.Graphics;
   private scoresZone!: Phaser.Geom.Rectangle;
   private dailyLabel!: Phaser.GameObjects.Text;
   private dailyValue!: Phaser.GameObjects.Text;
@@ -402,6 +405,24 @@ export class MenuScene extends Phaser.Scene {
       .setDepth(20);
     this.scoresZone = new Phaser.Geom.Rectangle(16, 790, WORLD.width - 32, 50);
 
+    // The glint: a small gold spark beside the label while a lit omen has
+    // never been revealed on the page. It says THAT something waits, never
+    // which (the bridge — see CLAUDE.md, "The omens"). Wordless, and gold
+    // because it points at a reward. Positioned in refreshTexts(), after the
+    // translated label's width is known; a slow alpha breath, like a coal.
+    this.scoresGlint = this.add.graphics().setDepth(21);
+    this.scoresGlint.lineStyle(2, OMENS.glintColor, 1);
+    this.scoresGlint.lineBetween(0, -5, 0, 5);
+    this.scoresGlint.lineBetween(-3.5, 0, 3.5, 0);
+    this.tweens.add({
+      targets: this.scoresGlint,
+      alpha: { from: 1, to: 0.45 },
+      duration: OMENS.glintPulseMs / 2,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut"
+    });
+
     // Settings, top left (the moon occupies the right): two concentric moon
     // rings — no asset, nothing to translate in the drawing.
     const gear = this.add.graphics().setDepth(20);
@@ -451,6 +472,7 @@ export class MenuScene extends Phaser.Scene {
     this.scoresIcon.setVisible(on);
     this.scoresLabel.setVisible(on);
     this.scoresChevron.setVisible(on);
+    this.scoresGlint.setVisible(on && hasUnseenOmens());
     this.dailyLabel.setVisible(on);
     this.dailyValue.setVisible(on);
     for (const piece of this.homeExtras) piece.setVisible(on);
@@ -713,6 +735,12 @@ export class MenuScene extends Phaser.Scene {
 
     setCaps(this.scoresLabel, t("scores"));
     fitText(this.scoresLabel, WORLD.width - 140, 12);
+    // The glint sits just past the translated label, whatever its width.
+    this.scoresGlint.setPosition(
+      this.scoresLabel.x + this.scoresLabel.width + 16,
+      this.scoresLabel.y
+    );
+    this.scoresGlint.setVisible(homeShowing && hasUnseenOmens());
 
     setCaps(this.dailyLabel, t("menu.daily"));
     fitText(this.dailyLabel, WORLD.width - 160, 12);
