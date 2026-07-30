@@ -27,6 +27,7 @@ import {
   SLOWMO,
   TIER_FX,
   TIERS,
+  tierHalo,
   tierSky,
   TRAIL,
   TYPE,
@@ -56,7 +57,13 @@ import { actionBand, fitText } from "./ui";
 import { Witch } from "./witchShape";
 
 /** Current interpolated parameters: difficulty + sky mood. */
-type TierParams = Difficulty & { skyTop: number; skyBottom: number };
+type TierParams = Difficulty & {
+  skyTop: number;
+  skyBottom: number;
+  /** Palette fields, rendering only — see TierPalette in config.ts. */
+  sceneryTint: number;
+  coolValueDrop: number;
+};
 
 const MOON_COLOR = 0xf5efd8;
 
@@ -528,12 +535,12 @@ export class FlightScene extends Phaser.Scene {
     const tier = TIERS[0];
 
     const sky = this.add.graphics().setDepth(28);
-    sky.fillGradientStyle(tier.skyTop, tier.skyTop, tier.skyBottom, tier.skyBottom, 1);
+    sky.fillGradientStyle(tier.palette.skyTop, tier.palette.skyTop, tier.palette.skyBottom, tier.palette.skyBottom, 1);
     sky.fillRect(0, 0, WORLD.width, WORLD.height);
 
     // The same living background as the run, lifted above the dead world.
     this.deathScenery = new NightScenery(this).setDepth(28);
-    this.deathScenery.setMood(tier.skyTop, tier.skyBottom);
+    this.deathScenery.setMood(tier.palette.skyTop, tier.palette.skyBottom, tier.palette.sceneryTint);
 
     // Soft glow: the radial texture, not a solid circle (ugly hard edge).
     const glow = this.add
@@ -955,8 +962,11 @@ export class FlightScene extends Phaser.Scene {
       spawnInterval: tier.spawnInterval / GLOBAL_SPEED,
       essence: tier.essence,
       inverted: MOON_EYE.enabled && tier.invertContrast === true,
+      haloColor: tierHalo(tier),
       skyTop: sky.top,
-      skyBottom: sky.bottom
+      skyBottom: sky.bottom,
+      sceneryTint: tier.palette.sceneryTint,
+      coolValueDrop: tier.palette.coolValueDrop
     };
   }
 
@@ -1030,8 +1040,15 @@ export class FlightScene extends Phaser.Scene {
         // arrive rather than restyling the forest in place.
         essence: to.essence,
         inverted: to.inverted,
+        // The halo does not interpolate either, for the same reason as the
+        // species: it is baked into each obstacle's Graphics at spawn.
+        haloColor: to.haloColor,
         skyTop: lerpColor(this.diffFrom.skyTop, to.skyTop, k),
-        skyBottom: lerpColor(this.diffFrom.skyBottom, to.skyBottom, k)
+        skyBottom: lerpColor(this.diffFrom.skyBottom, to.skyBottom, k),
+        // The sky's hue arc is monotone precisely so this RGB lerp never
+        // crosses a muddy neutral (dev assertion in config.ts).
+        sceneryTint: lerpColor(this.diffFrom.sceneryTint, to.sceneryTint, k),
+        coolValueDrop: Phaser.Math.Linear(this.diffFrom.coolValueDrop, to.coolValueDrop, k)
       };
       // The sky redraw goes through applyAmbiance (the lerp changes its key).
     }
@@ -1059,12 +1076,24 @@ export class FlightScene extends Phaser.Scene {
       this.scoreText.setColor(this.hudInverted ? MOON_EYE.scoreColor : HUD_SCORE_COLOR);
       this.multiplierText.setColor(this.hudInverted ? MOON_EYE.multiplierColor : HUD_MULT_COLOR);
       this.magicFill.setFillStyle(this.hudInverted ? MOON_EYE.magicBarColor : MAGIC.barColor, 0.9);
+      // The thread's dot is additive, which is invisible on a pale sky: adding
+      // light to something already bright changes nothing. Inverted it becomes
+      // a normal-blended dark point instead.
+      this.threadDot
+        .setTint(this.hudInverted ? MOON_EYE.threadDotColor : PROGRESS_THREAD.dotColor)
+        .setBlendMode(this.hudInverted ? Phaser.BlendModes.NORMAL : Phaser.BlendModes.ADD);
+      this.drawThread();
     }
 
     // Cooled and desaturated sky.
     this.sky.clear();
-    const top = coolDesat(this.diffCurrent.skyTop, cold);
-    const bottom = coolDesat(this.diffCurrent.skyBottom, cold);
+    // The palette decides how much of the cooling is paid in LUMINANCE rather
+    // than in saturation. A drained palette (The Wall, saturation 0.12) has no
+    // saturation left to spend, so there the combo loss reads as the sky going
+    // darker — otherwise it would be invisible on that tier alone.
+    const drop = this.diffCurrent.coolValueDrop;
+    const top = coolDesat(this.diffCurrent.skyTop, cold, drop);
+    const bottom = coolDesat(this.diffCurrent.skyBottom, cold, drop);
     this.sky.fillGradientStyle(top, top, bottom, bottom, 1);
     this.sky.fillRect(0, 0, WORLD.width, WORLD.height);
 
@@ -1074,7 +1103,7 @@ export class FlightScene extends Phaser.Scene {
     this.moonIdleGlow.setTint(moonTint);
 
     // Treelines, mist and stars follow the same cooled sky.
-    this.scenery.setMood(top, bottom);
+    this.scenery.setMood(top, bottom, this.diffCurrent.sceneryTint);
 
     // Sparser, cooler ambient dust.
     this.ambient.frequency = Phaser.Math.Linear(AMBIENT.frequencyCold, AMBIENT.frequencyLit, ratio);
@@ -1682,13 +1711,23 @@ export class FlightScene extends Phaser.Scene {
     const y = this.threadY;
     g.clear();
 
+    // The thread flips polarity with the sky, like the score and the timer.
+    // Its light violet measured a contrast of 2.03 on pale gold — legible only
+    // if you knew where to look — and the timer's inverted colour used to go
+    // violet too, leaving the two readouts 1 degree of hue apart. They mean
+    // opposite things, so they stay 129 degrees apart instead. See MOON_EYE.
+    const inv = this.diffCurrent.inverted;
+    const trackColor = inv ? MOON_EYE.threadTrackColor : th.trackColor;
+    const tickColor = inv ? MOON_EYE.threadTickColor : th.tickColor;
+    const notchColor = inv ? MOON_EYE.threadNotchColor : th.notchColor;
+
     const left = th.marginX;
     const width = WORLD.width - th.marginX * 2;
-    g.fillStyle(th.trackColor, th.trackAlpha);
+    g.fillStyle(trackColor, th.trackAlpha);
     g.fillRect(left, y - th.height / 2, width, th.height);
 
     // Tier boundaries: the shape of the forest ahead.
-    g.fillStyle(th.tickColor, th.tickAlpha);
+    g.fillStyle(tickColor, th.tickAlpha);
     for (const tier of TIERS) {
       if (tier.startTime <= 0 || tier.startTime > this.threadSpan) continue;
       g.fillRect(this.threadX(tier.startTime) - 0.5, y - th.tickHeight / 2, 1, th.tickHeight);
@@ -1697,7 +1736,7 @@ export class FlightScene extends Phaser.Scene {
     // The record. Only drawn when there is one worth showing — same threshold
     // as the arch, so the whole Percée appears in one piece.
     if (this.perceeTime > 0 && this.perceeTime <= this.threadSpan) {
-      g.fillStyle(th.notchColor, th.notchAlpha);
+      g.fillStyle(notchColor, th.notchAlpha);
       g.fillRect(this.threadX(this.perceeTime) - 1, y - th.notchHeight / 2, 2, th.notchHeight);
     }
   }
@@ -1814,13 +1853,21 @@ export class FlightScene extends Phaser.Scene {
 /**
  * Desaturates and cools a colour: k=0 -> untouched, k=1 -> blue-grey of the
  * same luminance. This is the "cold" of a lost combo, instead of blackness.
+ *
+ * @param valueDrop fraction of the cooling paid as a LUMINANCE drop instead
+ *                  (TierPalette.coolValueDrop). Desaturation needs saturation
+ *                  to spend; on a palette that has almost none it does nothing
+ *                  visible, so there the loss is expressed by going darker.
+ *                  A dev assertion in config.ts refuses a cold palette that
+ *                  does not compensate this way.
  */
-function coolDesat(color: number, k: number): number {
+function coolDesat(color: number, k: number, valueDrop = 0): number {
   const c = Phaser.Display.Color.ValueToColor(color);
   const lum = 0.299 * c.red + 0.587 * c.green + 0.114 * c.blue;
-  const r = Phaser.Math.Linear(c.red, lum * 0.8, k);
-  const g = Phaser.Math.Linear(c.green, lum * 0.95, k);
-  const b = Phaser.Math.Linear(c.blue, Math.min(255, lum * 1.25), k);
+  const f = 1 - k * valueDrop;
+  const r = Phaser.Math.Linear(c.red, lum * 0.8, k) * f;
+  const g = Phaser.Math.Linear(c.green, lum * 0.95, k) * f;
+  const b = Phaser.Math.Linear(c.blue, Math.min(255, lum * 1.25), k) * f;
   return Phaser.Display.Color.GetColor(Math.round(r), Math.round(g), Math.round(b));
 }
 

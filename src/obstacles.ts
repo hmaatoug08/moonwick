@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { FEEDBACK, MAGIC, MOON_EYE, NEAR_MISS, OBSTACLE_ART, OBSTACLES, WORLD } from "./config";
+import { MAGIC, MOON_EYE, NEAR_MISS, OBSTACLE_ART, OBSTACLES, WORLD } from "./config";
 import {
   ensureObstacleTextures,
   frameName,
@@ -18,6 +18,13 @@ export type Difficulty = {
   essence: Essence;
   /** "The Moon's Eye" contrast inversion — RENDERING ONLY. */
   inverted: boolean;
+  /**
+   * Graze halo of the current tier's palette — RENDERING ONLY. Taken at SPAWN,
+   * like `essence`: obstacles already on screen keep the halo they were born
+   * with, so a tier change rolls in as new trees arrive instead of recolouring
+   * the forest in place.
+   */
+  haloColor: number;
 };
 
 /**
@@ -311,7 +318,7 @@ export class ObstacleSpawner {
     // ring on pale gold would stop teaching the rule.
     const halo = this.scene.add.graphics();
     container.add(halo);
-    halo.fillStyle(diff.inverted ? MOON_EYE.haloColor : FEEDBACK.haloColor, 1);
+    halo.fillStyle(diff.haloColor, 1);
     for (const part of parts) this.addHalo(halo, part, cap);
 
     // COLLISION — unchanged: one rectangle plus one rounded tip per part. The
