@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import {
   AMBIENT,
   DEATH_MESSAGE,
+  DEATH_FX,
   DEBUG_HITBOX,
   DEBUG_START_TIER,
   DEBUG_STATS,
@@ -41,9 +42,11 @@ import {
   isTutorialDone,
   markTutorialDone,
   pushDeath,
+  recordDailyRun,
   recordRun,
   shouldEase
 } from "./save";
+import { hashSeed } from "./rng";
 import { ESSENCES, type Essence } from "./obstacleShapes";
 import { PerceeMarker, perceeTension } from "./percee";
 import { drawHomeIcon } from "./icons";
@@ -265,6 +268,10 @@ export class FlightScene extends Phaser.Scene {
   private perceeT = 0;
   /** What actually killed her, captured at the moment of contact. */
   private deathCause: DeathCause = "branch";
+  /** The exact contact, for the impact beat. Null once consumed or reset. */
+  private deathImpact: { x: number; y: number; obstacle: Obstacle } | null = null;
+  /** Pending reveal of the rest screen; cancelled by a mid-beat replay tap. */
+  private deathReveal?: Phaser.Time.TimerEvent;
   /**
    * Adaptive easing is on for this run. Decided at reset from the death log,
    * lifted mid-run once the player clears MERCY.clearSeconds. Never surfaced
@@ -284,6 +291,11 @@ export class FlightScene extends Phaser.Scene {
   private firstGrazeEver = false;
   private cues!: RewardCues;
 
+  /** The run is a Daily Moon attempt: seeded course, no personalisation. */
+  private dailyMode = false;
+  /** UTC date of the attempt in flight, the daily record's key. */
+  private dailyDate = "";
+
   /** Pause (tab in the background): the world is frozen, you cannot die. */
   private paused = false;
   private pausePanel!: Phaser.GameObjects.Container;
@@ -291,6 +303,15 @@ export class FlightScene extends Phaser.Scene {
 
   constructor() {
     super("flight");
+  }
+
+  /**
+   * The Daily Moon: started with `{ daily: true }` from the home screen.
+   * The flag lives for the scene's whole life, so in-place replays stay on
+   * the daily; going home and tapping play returns to free flight.
+   */
+  init(data?: { daily?: boolean }): void {
+    this.dailyMode = data?.daily === true;
   }
 
   private get multiplier(): number {
@@ -856,10 +877,19 @@ export class FlightScene extends Phaser.Scene {
     music.setMode("run");
     music.reseed();
     this.spawner.reset();
-    // Before the first graze ever, the forest opens with authored trees: a
-    // huge readable invitation, then tighter, then the real rhythm. The
-    // choreography re-arms every run until the first graze lands.
-    if (!isTutorialDone()) this.spawner.setOnboarding(ONBOARDING.gapScales);
+    if (this.dailyMode) {
+      // The Daily Moon: everyone flies the SAME forest. The seed is the UTC
+      // date, re-armed on every attempt — unlimited attempts, one course.
+      // No authored opening here either: personalisation of any kind breaks
+      // the parity the daily exists for.
+      this.dailyDate = new Date().toISOString().slice(0, 10);
+      this.spawner.setSeed(hashSeed(`moonwick:${this.dailyDate}`));
+    } else if (!isTutorialDone()) {
+      // Before the first graze ever, the forest opens with authored trees: a
+      // huge readable invitation, then tighter, then the real rhythm. The
+      // choreography re-arms every run until the first graze lands.
+      this.spawner.setOnboarding(ONBOARDING.gapScales);
+    }
     this.trailEmitter.killAll();
 
     this.witch.reset(WITCH.x, WORLD.height / 2);
@@ -907,12 +937,19 @@ export class FlightScene extends Phaser.Scene {
     this.updateThread();
     this.runDuration = 0;
     // Read once per run, from the death log. Nothing tells the player.
-    this.easing = shouldEase();
+    // MERCY is OFF on the daily: adaptive easing personalises the course,
+    // and the daily's whole point is that everyone flies the same one.
+    this.easing = this.dailyMode ? false : shouldEase();
     this.magic = MAGIC.max;
     this.flickerPhase = 0;
     this.slowMoLeft = 0;
     this.tweens.timeScale = 1;
     this.dead = false;
+    // A mid-beat replay tap: the pending reveal must die with the old run,
+    // or the rest screen would drop onto the new one holdMs later.
+    this.deathReveal?.remove();
+    this.deathReveal = undefined;
+    this.deathImpact = null;
     this.deathPanel.setVisible(false);
     this.setDeathSceneVisible(false);
     this.trailEmitter.start();
@@ -1211,6 +1248,10 @@ export class FlightScene extends Phaser.Scene {
       bestGrazesPerSecond: this.bestGrazesPerSecondThisRun
     });
 
+    // The day's best, kept beside the classic records (which this run also
+    // feeds: a daily flight is still a flight).
+    if (this.dailyMode) recordDailyRun(this.dailyDate, this.score);
+
     // Tuning log. `runDuration` is real flown seconds, so DEBUG_START_TIER
     // cannot pollute the measurement.
     pushDeath({
@@ -1223,12 +1264,36 @@ export class FlightScene extends Phaser.Scene {
     this.refreshDeathTexts(previousBestTime);
     this.freezeThread();
 
-    // Resting scenery: hide the lost run and stop the gameplay emitters,
-    // which would otherwise keep running behind an opaque sky.
     this.trailEmitter.stop();
     this.ambient.stop();
-    this.setDeathSceneVisible(true);
-    this.deathPanel.setVisible(true);
+
+    // THE IMPACT BEAT (DEATH_FX): the frozen world holds for holdMs so the
+    // player reads WHAT killed her — a cold spark at the exact contact point,
+    // the killer's moon-rim flashing bright, the witch recoiling off it —
+    // then the rest screen appears as before. The replay tap is live through
+    // all of it: the hold delays pixels, never input; a mid-beat tap
+    // restarts instantly (resetRun cancels the reveal).
+    const impact = this.deathImpact;
+    if (impact) {
+      this.grazeBurst.setParticleTint(DEATH_FX.sparkColor);
+      this.grazeBurst.emitParticleAt(impact.x, impact.y, DEATH_FX.sparks);
+      for (const rim of impact.obstacle.rimImages) rim.setTint(DEATH_FX.rimFlashColor);
+      const away = Math.atan2(this.witch.y - impact.y, this.witch.x - impact.x);
+      this.witch.grazeKick(this.witch.y < impact.y ? -1 : 1);
+      this.tweens.add({
+        targets: this.witch,
+        x: this.witch.x + Math.cos(away) * DEATH_FX.recoilPx,
+        y: this.witch.y + Math.sin(away) * DEATH_FX.recoilPx,
+        duration: DEATH_FX.recoilMs,
+        ease: "Quad.easeOut"
+      });
+    }
+    this.deathReveal = this.time.delayedCall(impact ? DEATH_FX.holdMs : 0, () => {
+      // Resting scenery: hide the lost run (the gameplay emitters are already
+      // stopped, they would otherwise run on behind an opaque sky).
+      this.setDeathSceneVisible(true);
+      this.deathPanel.setVisible(true);
+    });
   }
 
   /**
@@ -1381,6 +1446,10 @@ export class FlightScene extends Phaser.Scene {
 
       if (d <= NEAR_MISS.deathRadius) {
         this.deathCause = obstacle.kind === "trunk" ? "trunk" : "branch";
+        // Where exactly she hit: the impact beat points the spark, the rim
+        // flash and the recoil at this obstacle and this point.
+        const contact = obstacle.contactPoint(wx, wy);
+        this.deathImpact = { x: contact.x, y: contact.y, obstacle };
         return true;
       }
 

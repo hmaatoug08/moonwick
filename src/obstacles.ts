@@ -8,6 +8,7 @@ import {
   SHAPE_TEXTURE,
   type Essence
 } from "./obstacleShapes";
+import { rng } from "./rng";
 
 /** Current difficulty parameters, interpolated between tiers by the scene. */
 export type Difficulty = {
@@ -151,6 +152,39 @@ export class Obstacle {
     return best;
   }
 
+  /**
+   * Closest point on the obstacle's SURFACE to (px, py) — where the impact
+   * spark lands. Same shapes as distanceTo, so the spark can never appear
+   * anywhere the collision itself did not happen.
+   */
+  contactPoint(px: number, py: number): { x: number; y: number } {
+    const cx = this.container.x;
+    let best = Infinity;
+    let bx = cx;
+    let by = py;
+    for (const shape of this.shapes) {
+      let nx: number;
+      let ny: number;
+      if (shape.type === "rect") {
+        nx = Phaser.Math.Clamp(px, cx - shape.halfWidth, cx + shape.halfWidth);
+        ny = Phaser.Math.Clamp(py, shape.top, shape.bottom);
+      } else {
+        const dx = px - cx;
+        const dy = py - shape.y;
+        const len = Math.hypot(dx, dy) || 1;
+        nx = cx + (dx / len) * shape.radius;
+        ny = shape.y + (dy / len) * shape.radius;
+      }
+      const d = Math.hypot(px - nx, py - ny);
+      if (d < best) {
+        best = d;
+        bx = nx;
+        by = ny;
+      }
+    }
+    return { x: bx, y: by };
+  }
+
   /** Past the witch: no contact is possible any more (scrolling is one-way). */
   isBehind(witchX: number): boolean {
     return this.container.x + this.halfWidth < witchX;
@@ -178,6 +212,15 @@ export class ObstacleSpawner {
    * Widening is strictly easier, so every generation guarantee holds.
    */
   private onboarding: number[] = [];
+  /**
+   * Seeded course (the Daily Moon): non-null replaces every GAMEPLAY draw —
+   * intervals, categories, gap sizes, gap positions, branch sides — never
+   * the cosmetic silhouette-variant picks: course parity is COLLISION
+   * parity, and two players may see differently barked trees in the same
+   * places. Cleared by reset(); the scene re-arms it per attempt so every
+   * attempt of the day flies the same forest.
+   */
+  private seeded: (() => number) | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {
     ensureObstacleTextures(scene);
@@ -197,9 +240,10 @@ export class ObstacleSpawner {
     this.passY = WORLD.height / 2;
     this.lastCategory = null;
     this.sameCategoryStreak = 0;
-    // The authored opening does not survive a reset by itself: the scene
-    // re-arms it while the first graze ever is still pending.
+    // Neither the authored opening nor the seeded course survives a reset by
+    // itself: the scene re-arms what the next run needs.
     this.onboarding.length = 0;
+    this.seeded = null;
   }
 
   /** Arm the authored opening: one gap-size multiplier per upcoming spawn. */
@@ -207,12 +251,32 @@ export class ObstacleSpawner {
     this.onboarding = [...gapScales];
   }
 
+  /** Arm (or clear) the seeded course. Call right after reset(). */
+  setSeed(seed: number | null): void {
+    this.seeded = seed === null ? null : rng(seed);
+  }
+
+  // Every gameplay draw funnels through these three, so the seeded course
+  // and free play cannot diverge in WHICH decisions are random — only in
+  // where the numbers come from.
+  private rand(): number {
+    return this.seeded ? this.seeded() : Math.random();
+  }
+
+  private randBetween(min: number, max: number): number {
+    return Math.floor(this.rand() * (max - min + 1)) + min;
+  }
+
+  private randFloat(min: number, max: number): number {
+    return min + this.rand() * (max - min);
+  }
+
   update(dt: number, diff: Difficulty): void {
     this.sinceSpawn += dt;
     if (this.sinceSpawn >= this.nextInterval) {
       this.sinceSpawn -= this.nextInterval;
       // Jitter around the tier interval, then the fairness cap.
-      const jitter = Phaser.Math.FloatBetween(1 - OBSTACLES.intervalJitter, 1 + OBSTACLES.intervalJitter);
+      const jitter = this.randFloat(1 - OBSTACLES.intervalJitter, 1 + OBSTACLES.intervalJitter);
       this.nextInterval = clampInterval(diff.spawnInterval * jitter);
       this.spawn(diff);
     }
@@ -275,9 +339,9 @@ export class ObstacleSpawner {
       // Hole = the tier's gapSize +/- jitter, never below the playable floor.
       const gapHeight = Math.max(
         OBSTACLES.gapFloor,
-        gapSize + Phaser.Math.Between(-OBSTACLES.trunk.gapJitter, OBSTACLES.trunk.gapJitter)
+        gapSize + this.randBetween(-OBSTACLES.trunk.gapJitter, OBSTACLES.trunk.gapJitter)
       );
-      const wanted = this.passY + Phaser.Math.Between(-OBSTACLES.maxGapShift, OBSTACLES.maxGapShift);
+      const wanted = this.passY + this.randBetween(-OBSTACLES.maxGapShift, OBSTACLES.maxGapShift);
       const center = Phaser.Math.Clamp(
         wanted,
         OBSTACLES.safeMarginTop + gapHeight / 2,
@@ -300,7 +364,7 @@ export class ObstacleSpawner {
       const slack = OBSTACLES.branch.sideSwitchSlack;
       if (bandTop > bandBottom + slack) kind = "branch-bottom";
       else if (bandBottom > bandTop + slack) kind = "branch-top";
-      else kind = Math.random() < 0.5 ? "branch-top" : "branch-bottom";
+      else kind = this.rand() < 0.5 ? "branch-top" : "branch-bottom";
 
       if (kind === "branch-top") {
         gapTop = lengthTop + cap;
@@ -402,7 +466,7 @@ export class ObstacleSpawner {
     const cap = OBSTACLES.branch.width / 2;
     const band =
       gapSize * OBSTACLES.branch.bandFactor +
-      Phaser.Math.Between(-OBSTACLES.branch.bandJitter, OBSTACLES.branch.bandJitter);
+      this.randBetween(-OBSTACLES.branch.bandJitter, OBSTACLES.branch.bandJitter);
     const wanted = WORLD.height - band - cap;
     const maxLength = reachable - OBSTACLES.clearance - cap;
     return Math.max(OBSTACLES.branch.lengthMin, Math.min(wanted, maxLength));
@@ -470,7 +534,7 @@ export class ObstacleSpawner {
       this.sameCategoryStreak >= 2 ? entries.filter(([k]) => k !== this.lastCategory) : entries;
 
     const total = pool.reduce((sum, [, weight]) => sum + weight, 0);
-    let roll = Math.random() * total;
+    let roll = this.rand() * total;
     let category: ObstacleCategory = pool[pool.length - 1][0];
     for (const [candidate, weight] of pool) {
       roll -= weight;

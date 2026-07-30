@@ -25,13 +25,20 @@ import { getLanguage, LANG_NAMES, LANGS, Lang, onLanguageChange, setLanguage, t 
 import {
   isMusicEnabled,
   isSoundEnabled,
+  loadDaily,
   loadDeaths,
   loadStats,
   setMusicEnabled,
   setSoundEnabled,
   shouldEase
 } from "./save";
-import { ensureLogoTexture, LOGO_MARK_KEY, LOGO_PAD_UNITS } from "./logo";
+import {
+  ensureLogoTexture,
+  ensureLogoTextureSmall,
+  LOGO_MARK_KEY,
+  LOGO_MARK_SMALL_KEY,
+  LOGO_PAD_UNITS
+} from "./logo";
 import { music } from "./music";
 import { addMoon, NightScenery } from "./scenery";
 import { ensureTextures, LIGHT_KEY, SPARK_KEY } from "./textures";
@@ -89,6 +96,9 @@ export class MenuScene extends Phaser.Scene {
   private scoresLabel!: Phaser.GameObjects.Text;
   private scoresChevron!: Phaser.GameObjects.Text;
   private scoresZone!: Phaser.Geom.Rectangle;
+  private dailyLabel!: Phaser.GameObjects.Text;
+  private dailyValue!: Phaser.GameObjects.Text;
+  private dailyZone!: Phaser.Geom.Rectangle;
   private settingsOpen = false;
   private gearZone!: Phaser.Geom.Rectangle;
   private backZone!: Phaser.Geom.Rectangle;
@@ -340,16 +350,42 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(20);
-    this.tapText = capsText(this, cx, 723, "", 11, "", "600", 0.28)
+    this.tapText = capsText(this, cx, 715, "", 11, "", "600", 0.28)
       .setOrigin(0.5)
       .setDepth(20)
       .setColor(TYPE.violetDim);
+
+    // The Daily Moon: one shared forest a day, seeded by the UTC date. A
+    // hairline row like Scores below it; today's best rides the right end in
+    // gold once an attempt exists, a chevron invites before that.
+    ensureLogoTextureSmall(this);
+    const dailyY = 760;
+    const dailyLine = hairline(this, 28, 736, WORLD.width - 56, 0.18).setDepth(20);
+    this.homeExtras.push(dailyLine);
+    const dailyIcon = this.add
+      .image(43, dailyY, LOGO_MARK_SMALL_KEY)
+      .setDisplaySize(22, 22 * ((LOGO.unit + LOGO_PAD_UNITS) / LOGO.unit))
+      .setDepth(21);
+    this.homeExtras.push(dailyIcon);
+    this.dailyLabel = capsText(this, 70, dailyY, "", 12, TYPE.labelBright, "600", 0.24)
+      .setOrigin(0, 0.5)
+      .setDepth(20);
+    this.dailyValue = this.add
+      .text(WORLD.width - 28, dailyY, "", {
+        fontFamily: TYPE.serif,
+        fontStyle: "500",
+        fontSize: "19px",
+        color: TYPE.gold
+      })
+      .setOrigin(1, 0.5)
+      .setDepth(20);
+    this.dailyZone = new Phaser.Geom.Rectangle(16, 736, WORLD.width - 32, 46);
 
     // Scores: the progression hub, reachable from here and from nowhere else.
     // A hairline row, not a boxed button (rule 1): book icon, caps label, a
     // serif chevron. The label is `t("scores")`; the key stays neutral.
     const scoresY = 812;
-    const rowLine = hairline(this, 28, 772, WORLD.width - 56, 0.18).setDepth(20);
+    const rowLine = hairline(this, 28, 788, WORLD.width - 56, 0.18).setDepth(20);
     this.homeExtras.push(rowLine);
     this.scoresIcon = this.add.graphics().setDepth(21);
     drawBookIcon(this.scoresIcon, 43, scoresY, 1.05);
@@ -364,7 +400,7 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(1, 0.5)
       .setDepth(20);
-    this.scoresZone = new Phaser.Geom.Rectangle(16, scoresY - 28, WORLD.width - 32, 56);
+    this.scoresZone = new Phaser.Geom.Rectangle(16, 790, WORLD.width - 32, 50);
 
     // Settings, top left (the moon occupies the right): two concentric moon
     // rings — no asset, nothing to translate in the drawing.
@@ -415,6 +451,8 @@ export class MenuScene extends Phaser.Scene {
     this.scoresIcon.setVisible(on);
     this.scoresLabel.setVisible(on);
     this.scoresChevron.setVisible(on);
+    this.dailyLabel.setVisible(on);
+    this.dailyValue.setVisible(on);
     for (const piece of this.homeExtras) piece.setVisible(on);
   }
 
@@ -676,6 +714,16 @@ export class MenuScene extends Phaser.Scene {
     setCaps(this.scoresLabel, t("scores"));
     fitText(this.scoresLabel, WORLD.width - 140, 12);
 
+    setCaps(this.dailyLabel, t("menu.daily"));
+    fitText(this.dailyLabel, WORLD.width - 160, 12);
+    // Today's best in gold once an attempt exists; a quiet invitation before.
+    const daily = loadDaily(new Date().toISOString().slice(0, 10));
+    if (daily) {
+      this.dailyValue.setText(String(daily.best)).setFontSize(19).setColor(TYPE.gold);
+    } else {
+      this.dailyValue.setText("›").setFontSize(22).setColor(TYPE.violetDim);
+    }
+
     this.playText.setText(t("menu.hold"));
     fitText(this.playText, WORLD.width - 48, 30);
     setCaps(this.tapText, t("menu.tap"));
@@ -890,6 +938,11 @@ export class MenuScene extends Phaser.Scene {
         this.settingsPanel.setVisible(false);
         this.setHomeVisible(true);
       }
+      return;
+    }
+
+    if (this.dailyZone.contains(pointer.x, pointer.y)) {
+      this.scene.start("flight", { daily: true });
       return;
     }
 
