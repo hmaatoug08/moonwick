@@ -520,6 +520,38 @@ The celebration itself was strengthened with the choreography (slow motion
 260 -> 380 ms, flash 0.22 -> 0.3, sparks 26 -> 40): the moment the game
 clicks happens exactly once, and now the opening walks the player to it.
 
+### The Daily Moon
+
+A daily run is the cheapest social hook a backendless game can have: same
+forest for everyone, compare scores anywhere people already talk. The seed
+is the UTC date hashed — no server, no accounts, and "did you fly today's
+moon?" works across the planet because UTC is the same planet-wide.
+
+**What "the same forest" means.** The spawner's gameplay draws — intervals,
+categories, gap sizes, gap positions, branch sides — funnel through one
+`rand()` that a seed can replace. The cosmetic silhouette-variant picks
+deliberately stay free: course parity is COLLISION parity, and two players
+may see differently barked trees in the same places. Seeding the bark would
+buy nothing and cost the visual variety between attempts.
+
+**Why unlimited attempts.** One-attempt dailies punish the accidental
+early tap — brutal in a game whose replay tap is deliberately live
+everywhere. Unlimited attempts on a fixed course turn the daily into the
+game's only PRACTISABLE run: the forest stops being luck, mastery of a
+specific line becomes possible, and the day's best is a claim worth
+sharing. The record keeps best-of-day and the attempt count.
+
+**Why MERCY and the authored opening are off.** Both personalise the
+course — easing widens gaps for struggling players, the onboarding widens
+the first trees for new ones. Admirable in free flight, poison here: a
+daily where two players flew different forests is not a daily. This is the
+one place the game's kindness steps back, and it steps back silently.
+
+**Why a daily flight still feeds the classic records.** A run is a run:
+its grazes, stats and history are real. Splitting daily numbers from
+classic ones would double every record surface for no player benefit —
+the only daily-specific fact worth keeping is the day's best, and it dies
+with the date.
 ### The PWA shell
 
 Sixty percent of the "mobile app" feel costs nothing at the app stores: an

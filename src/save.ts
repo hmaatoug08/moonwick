@@ -238,6 +238,44 @@ export function setSoundEnabled(on: boolean): void {
   write("sound", on ? "1" : "0");
 }
 
+/**
+ * The Daily Moon: today's best and attempt count, under `moonwick:daily`.
+ * One record only — yesterday's daily is gone the moment the date differs,
+ * which is the whole point of a daily. Malformed content degrades to "no
+ * daily yet", never throws.
+ */
+export type DailyRecord = { date: string; best: number; attempts: number };
+
+export function loadDaily(date: string): DailyRecord | null {
+  const raw = read("daily");
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<DailyRecord>;
+    if (
+      parsed.date === date &&
+      typeof parsed.best === "number" &&
+      typeof parsed.attempts === "number"
+    ) {
+      return { date, best: parsed.best, attempts: parsed.attempts };
+    }
+  } catch {
+    // Hand-edited or truncated: treated as absent.
+  }
+  return null;
+}
+
+/** One more attempt flown today; keeps the day's best. */
+export function recordDailyRun(date: string, score: number): DailyRecord {
+  const current = loadDaily(date);
+  const next: DailyRecord = {
+    date,
+    best: Math.max(current?.best ?? 0, score),
+    attempts: (current?.attempts ?? 0) + 1
+  };
+  write("daily", JSON.stringify(next));
+  return next;
+}
+
 /** Music toggle, separate from the effects: `moonwick:music`, on by default. */
 export function isMusicEnabled(): boolean {
   return read("music") !== "0";

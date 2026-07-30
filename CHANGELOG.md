@@ -9,6 +9,16 @@ This project follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+**The Daily Moon — one shared forest a day** (`src/rng.ts` new, `src/obstacles.ts`, `src/FlightScene.ts`, `src/MenuScene.ts`, `src/ScoresScene.ts`, `src/save.ts`, `src/logo.ts`, `src/i18n.ts`, `CLAUDE.md`, `DESIGN.md`)
+
+A daily seeded run, no backend: the seed is the UTC date hashed, so every player on earth flies the SAME forest and "did you fly today's moon?" works planet-wide.
+
+- **Deterministic course**: the spawner's gameplay draws (intervals, categories, gap sizes, gap positions, branch sides) funnel through one `rand()` a seed can replace (`ObstacleSpawner.setSeed`); cosmetic silhouette-variant picks stay free — course parity is COLLISION parity. Verified live: two daily attempts produced identical courses, unseeded runs differ.
+- **All personalisation OFF in daily mode**: MERCY easing and the authored onboarding opening both change the course, and the daily exists so nobody's differs. Verified: easing false in daily.
+- **Unlimited attempts, one course** (design decision -> DESIGN.md): the daily becomes the game's only practisable run; the record keeps best-of-day and attempts, under `moonwick:daily` via save.ts, replaced whole when the UTC date changes. Verified: best 217 kept over a worse 150 attempt, attempts counting.
+- **Home row** "Daily Moon" (`menu.daily`, four languages) with the small-recipe crescent icon (new `ensureLogoTextureSmall` — the two-tier no-witch rule applies to chrome) and today's best in gold once flown; the Records page shows the same row while the day lasts. A daily flight still feeds the classic records: a run is a run.
+- **`src/rng.ts` new**: the one mulberry32 + `hashSeed`, now shared by the scenery, the music and the daily — the two local copies deduplicated, "seeded" means one thing.
+- No scoring or difficulty change; the classic game is untouched (seed null = the exact previous behaviour, drawn from `Math.random`).
 **PWA — the web version is the app** (`src/pwa.ts` new, `public/sw.js` new, `index.html`, `src/main.ts`, `CLAUDE.md`, `DESIGN.md`)
 
 Web packaging ahead of P7 (Capacitor untouched): installable, fullscreen, portrait-locked, offline-capable — and still zero asset files.

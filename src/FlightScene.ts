@@ -41,9 +41,11 @@ import {
   isTutorialDone,
   markTutorialDone,
   pushDeath,
+  recordDailyRun,
   recordRun,
   shouldEase
 } from "./save";
+import { hashSeed } from "./rng";
 import { ESSENCES, type Essence } from "./obstacleShapes";
 import { PerceeMarker, perceeTension } from "./percee";
 import { drawHomeIcon } from "./icons";
@@ -282,6 +284,11 @@ export class FlightScene extends Phaser.Scene {
   private firstGrazeEver = false;
   private cues!: RewardCues;
 
+  /** The run is a Daily Moon attempt: seeded course, no personalisation. */
+  private dailyMode = false;
+  /** UTC date of the attempt in flight, the daily record's key. */
+  private dailyDate = "";
+
   /** Pause (tab in the background): the world is frozen, you cannot die. */
   private paused = false;
   private pausePanel!: Phaser.GameObjects.Container;
@@ -289,6 +296,15 @@ export class FlightScene extends Phaser.Scene {
 
   constructor() {
     super("flight");
+  }
+
+  /**
+   * The Daily Moon: started with `{ daily: true }` from the home screen.
+   * The flag lives for the scene's whole life, so in-place replays stay on
+   * the daily; going home and tapping play returns to free flight.
+   */
+  init(data?: { daily?: boolean }): void {
+    this.dailyMode = data?.daily === true;
   }
 
   private get multiplier(): number {
@@ -854,10 +870,19 @@ export class FlightScene extends Phaser.Scene {
     music.setMode("run");
     music.reseed();
     this.spawner.reset();
-    // Before the first graze ever, the forest opens with authored trees: a
-    // huge readable invitation, then tighter, then the real rhythm. The
-    // choreography re-arms every run until the first graze lands.
-    if (!isTutorialDone()) this.spawner.setOnboarding(ONBOARDING.gapScales);
+    if (this.dailyMode) {
+      // The Daily Moon: everyone flies the SAME forest. The seed is the UTC
+      // date, re-armed on every attempt — unlimited attempts, one course.
+      // No authored opening here either: personalisation of any kind breaks
+      // the parity the daily exists for.
+      this.dailyDate = new Date().toISOString().slice(0, 10);
+      this.spawner.setSeed(hashSeed(`moonwick:${this.dailyDate}`));
+    } else if (!isTutorialDone()) {
+      // Before the first graze ever, the forest opens with authored trees: a
+      // huge readable invitation, then tighter, then the real rhythm. The
+      // choreography re-arms every run until the first graze lands.
+      this.spawner.setOnboarding(ONBOARDING.gapScales);
+    }
     this.trailEmitter.killAll();
 
     this.witch.reset(WITCH.x, WORLD.height / 2);
@@ -905,7 +930,9 @@ export class FlightScene extends Phaser.Scene {
     this.updateThread();
     this.runDuration = 0;
     // Read once per run, from the death log. Nothing tells the player.
-    this.easing = shouldEase();
+    // MERCY is OFF on the daily: adaptive easing personalises the course,
+    // and the daily's whole point is that everyone flies the same one.
+    this.easing = this.dailyMode ? false : shouldEase();
     this.magic = MAGIC.max;
     this.flickerPhase = 0;
     this.slowMoLeft = 0;
@@ -1191,6 +1218,10 @@ export class FlightScene extends Phaser.Scene {
       closestGraze: this.closestGrazeThisRun,
       bestGrazesPerSecond: this.bestGrazesPerSecondThisRun
     });
+
+    // The day's best, kept beside the classic records (which this run also
+    // feeds: a daily flight is still a flight).
+    if (this.dailyMode) recordDailyRun(this.dailyDate, this.score);
 
     // Tuning log. `runDuration` is real flown seconds, so DEBUG_START_TIER
     // cannot pollute the measurement.
