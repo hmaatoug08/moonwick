@@ -519,3 +519,37 @@ Three properties made this safe to author:
 The celebration itself was strengthened with the choreography (slow motion
 260 -> 380 ms, flash 0.22 -> 0.3, sparks 26 -> 40): the moment the game
 clicks happens exactly once, and now the opening walks the player to it.
+
+### The impact beat
+
+The death screen used to replace the world on the very same frame the
+collision landed. That was the right instinct for replay speed — and it hid
+the answer to "what happened?" at the exact moment the player asked it. The
+docs' own success criterion is wanting to replay immediately; a death that
+reads as arbitrary is the one thing that breaks that want.
+
+So death now has a beat, and it is INFORMATION, not drama:
+
+- **a cold spark at the precise contact point** — `Obstacle.contactPoint`
+  computes the closest point on the same collision shapes `distanceTo`
+  reads, so the spark can never appear anywhere the collision did not
+  happen;
+- **the killer's moon-rim flashes bright** for the whole beat — of the
+  several trees on screen, THIS one ended the run;
+- **the witch recoils off the contact**, a 12 px position-only tween: the
+  hitbox is dead, the art tells the story.
+
+The spark is violet-white and never gold. Gold is the reward colour, and a
+death that glitters gold for even a frame muddles the game's one economy.
+
+**The hold delays pixels, never input.** `onPointerDown` reads the `dead`
+flag, not any visibility, so the replay tap works from the first frame of
+the beat exactly as it worked on the first frame of the old screen. A
+mid-beat tap restarts instantly; `resetRun` cancels the pending reveal, or
+the rest screen would drop onto the new run 420 ms in. The rule in
+CLAUDE.md was amended rather than bent: what must be synchronous is the
+INPUT and the death-screen content, and both still are.
+
+420 ms is deliberate: long enough to read one spark and one flash, shorter
+than the shortest anger. Players who tap through it lose nothing — the
+information was for the ones who paused.
