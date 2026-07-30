@@ -149,10 +149,10 @@ export class MenuScene extends Phaser.Scene {
 
     // Scenery: same sky, same moon, same stars, treelines and mist as the game.
     const sky = this.add.graphics();
-    sky.fillGradientStyle(tier.skyTop, tier.skyTop, tier.skyBottom, tier.skyBottom, 1);
+    sky.fillGradientStyle(tier.palette.skyTop, tier.palette.skyTop, tier.palette.skyBottom, tier.palette.skyBottom, 1);
     sky.fillRect(0, 0, WORLD.width, WORLD.height);
     this.scenery = new NightScenery(this);
-    this.scenery.setMood(tier.skyTop, tier.skyBottom);
+    this.scenery.setMood(tier.palette.skyTop, tier.palette.skyBottom, tier.palette.sceneryTint);
     addMoon(this, 0xf5efd8);
 
     this.add
@@ -189,7 +189,9 @@ export class MenuScene extends Phaser.Scene {
         half
       );
     };
-    drawBar(FEEDBACK.haloColor, FEEDBACK.haloAlpha, this.demoBranch.halfWidth + NEAR_MISS.grazeRadius);
+    // The home screen paints the first tier's sky, so it takes the first
+    // tier's halo too: what it promises has to be what the run delivers.
+    drawBar(tier.palette.haloColor, FEEDBACK.haloAlpha, this.demoBranch.halfWidth + NEAR_MISS.grazeRadius);
     drawBar(OBSTACLE_ART.bodyColor, 1, this.demoBranch.halfWidth);
 
     this.demoTrail = this.add.particles(0, 0, SPARK_KEY, {

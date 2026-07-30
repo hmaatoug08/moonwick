@@ -310,7 +310,13 @@ export class NightScenery {
    * fade out as the sky-top brightens — on The Moon's Eye's pale gold they
    * would read as debris, not stars.
    */
-  setMood(skyTop: number, skyBottom: number): void {
+  /**
+   * @param tint colour the treelines are mixed towards — the tier's palette
+   *             gives the forest its material (cold blue-black at The Edge, a
+   *             warm ember at The Brambles). Defaults to the neutral ink used
+   *             before palettes existed.
+   */
+  setMood(skyTop: number, skyBottom: number, tint: number = SCENERY.treeline.darkColor): void {
     const lum = luminance(skyTop);
     this.starMood =
       1 -
@@ -321,9 +327,8 @@ export class NightScenery {
       );
     this.stars.setAlpha(SCENERY.stars.alpha * this.starMood);
 
-    const dark = SCENERY.treeline.darkColor;
-    this.treeFar.setTint(mixColor(skyBottom, dark, SCENERY.treeline.far.mix));
-    this.treeNear.setTint(mixColor(skyBottom, dark, SCENERY.treeline.near.mix));
+    this.treeFar.setTint(mixColor(skyBottom, tint, SCENERY.treeline.far.mix));
+    this.treeNear.setTint(mixColor(skyBottom, tint, SCENERY.treeline.near.mix));
     const mistTint = mixColor(skyBottom, 0xffffff, SCENERY.mist.lightMix);
     for (const mist of this.mists) mist.tile.setTint(mistTint);
   }

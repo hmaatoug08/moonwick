@@ -205,9 +205,11 @@ export type Tier = {
   gapSize: number;
   /** Obstacle spawn interval, in seconds. */
   spawnInterval: number;
-  // Mood: sky tint (top / bottom of the gradient).
-  skyTop: number;
-  skyBottom: number;
+  /**
+   * The tier's own colour — RENDERING ONLY, exactly like `essence`: no effect
+   * on spacing, gap width, speed or difficulty. See TierPalette.
+   */
+  palette: TierPalette;
   /**
    * Tree species drawn at this tier — RENDERING ONLY, no effect whatsoever on
    * spacing, width or difficulty. Obstacles take the species in force when
@@ -219,27 +221,115 @@ export type Tier = {
   invertContrast?: boolean;
 };
 
+/**
+ * One tier's palette — RENDERING ONLY.
+ *
+ * THE HUES ADVANCE IN ONE DIRECTION round the wheel across the five tiers
+ * (~208 -> 345 for the tops, ~194 -> 352 for the bottoms). That is not
+ * decoration: tier changes interpolate the sky in RGB over TIER_FX.transitionS,
+ * and a palette that doubled back would drag the gradient through a muddy
+ * grey-brown on the way. A dev assertion at the end of this file enforces both
+ * the direction and the per-palette halo contrast.
+ * -> DESIGN.md, "The chromatic arc".
+ */
+export type TierPalette = {
+  /** Sky gradient. Dark at the top, lighter at the bottom, as in every tier. */
+  skyTop: number;
+  skyBottom: number;
+  /**
+   * Colour the treelines and the mist are mixed towards. This is where a
+   * palette gets its material: the cold blue-black of The Edge, the warm ember
+   * intrusion of The Brambles.
+   */
+  sceneryTint: number;
+  /**
+   * Base saturation of the sky bottom, 0..1. Recorded rather than derived so
+   * the number a palette was authored against is visible next to it: it is the
+   * RESERVE the combo-loss cooling eats into (see `coolValueDrop`).
+   */
+  saturation: number;
+  /**
+   * Fraction of the combo-loss cooling paid as a LUMINANCE drop instead of
+   * desaturation, 0..1.
+   *
+   * The cooling desaturates towards blue-grey, which needs saturation to spend.
+   * The Wall has almost none by design (0.12), so there the same loss is
+   * expressed by the sky going darker and the obstacle rim strengthening
+   * instead — otherwise losing the combo would be inaudible there while being
+   * obvious everywhere else.
+   */
+  coolValueDrop: number;
+  /**
+   * The graze halo for this sky. Per palette because the halo is the main
+   * teacher of the rule and its readability is an INVARIANT: one violet for
+   * five skies leaves the gap too small on some of them.
+   */
+  haloColor: number;
+};
+
+/**
+ * The five palettes, authored in HSL and written here as hex.
+ *
+ * THE ARC (hue of the sky bottom): 194 teal -> 261 violet -> 303 wine ->
+ * 329 ink -> 351 plum, and on to the pale gold of the inversion (~38). One
+ * direction throughout, in both MOON_EYE states.
+ *
+ * LUMINANCE IS HELD ROUGHLY CONSTANT tier to tier, and that is deliberate:
+ * The Edge reads "light and luminous" through its HUE (a cool teal at the same
+ * luminance reads brighter and airier than violet), not by being brighter. A
+ * genuinely brighter Edge was measured first and rejected — it dropped the
+ * graze halo to a contrast of 1.017, i.e. invisible, and put the sky exactly
+ * on the witch's body luminance. -> DESIGN.md, "The chromatic arc".
+ */
+const PALETTES: Record<Tier["nameKey"], TierPalette> = {
+  // Indigo above, teal below: the open, luminous end of the arc.
+  "tier.edge":     { skyTop: 0x0a141d, skyBottom: 0x10242a, sceneryTint: 0x040a12, saturation: 0.45, coolValueDrop: 0.10, haloColor: 0x9c72fe },
+  // Deep violet — the forest proper, and the game's home colour.
+  "tier.darkwood": { skyTop: 0x090616, skyBottom: 0x21113e, sceneryTint: 0x05030a, saturation: 0.57, coolValueDrop: 0.10, haloColor: 0xad66ff },
+  // Wine violet, with the warm intrusion carried by the treeline tint: the
+  // first hint that something in this forest is not cold.
+  "tier.brambles": { skyTop: 0x160718, skyBottom: 0x341132, sceneryTint: 0x2a0d08, saturation: 0.51, coolValueDrop: 0.12, haloColor: 0xd970ff },
+  // Colour drains out. Saturation 0.12 is the lowest of the five ON PURPOSE —
+  // the Wall is where the forest stops having a colour — which is exactly why
+  // its coolValueDrop is the highest: the combo loss has to be paid in
+  // brightness because there is no saturation left to spend.
+  "tier.wall":     { skyTop: 0x080708, skyBottom: 0x181316, sceneryTint: 0x050406, saturation: 0.12, coolValueDrop: 0.34, haloColor: 0xf899ff },
+  // Deep plum: the FALLBACK sky, used only if MOON_EYE.enabled is turned off.
+  // With the inversion on (the default) the sky is MOON_EYE's pale gold and
+  // this is never drawn — but it still has to keep the arc monotone, and it
+  // has to stay dark so the light-on-dark HUD remains readable without the
+  // inversion's flip. coolValueDrop 0 here: on pale gold the cooling already
+  // reads as a huge hue swing (dS 0.18), and darkening it would eat the
+  // contrast of MOON_EYE's dark rim.
+  "tier.moonEye":  { skyTop: 0x190d10, skyBottom: 0x412327, sceneryTint: 0x1a0f08, saturation: 0.30, coolValueDrop: 0.00, haloColor: 0xffa3ff }
+};
+
 export const TIERS: readonly Tier[] = [
   // LEARNING TIER, 30 s: wide, slow, forgiving. A first-time player must be
   // able to survive here without effort and discover grazing on their own.
-  { nameKey: "tier.edge",     startTime: 0,   scrollSpeed: 220, gapSize: 250, spawnInterval: 1.75, skyTop: 0x0b0716, skyBottom: 0x241a4a, essence: "birch" },
+  { nameKey: "tier.edge",     startTime: 0,   scrollSpeed: 220, gapSize: 250, spawnInterval: 1.75, palette: PALETTES["tier.edge"],     essence: "birch" },
   // half 82.5: the forest closes in, still very passable.
-  { nameKey: "tier.darkwood", startTime: 30,  scrollSpeed: 235, gapSize: 170, spawnInterval: 1.7,  skyTop: 0x070410, skyBottom: 0x1a1038, essence: "gnarled" },
+  { nameKey: "tier.darkwood", startTime: 30,  scrollSpeed: 235, gapSize: 170, spawnInterval: 1.7,  palette: PALETTES["tier.darkwood"], essence: "gnarled" },
   // half 62.5: grazing becomes clearly the profitable line, never the only one.
-  { nameKey: "tier.brambles", startTime: 55,  scrollSpeed: 248, gapSize: 130, spawnInterval: 1.6,  skyTop: 0x0a0512, skyBottom: 0x2a1230, essence: "bramble" },
+  { nameKey: "tier.brambles", startTime: 55,  scrollSpeed: 248, gapSize: 130, spawnInterval: 1.6,  palette: PALETTES["tier.brambles"], essence: "bramble" },
   // half 50: tight, and still crossable clean by a careful player.
-  { nameKey: "tier.wall",     startTime: 85,  scrollSpeed: 258, gapSize: 105, spawnInterval: 1.5,  skyTop: 0x060309, skyBottom: 0x1f0d22, essence: "denseStand" },
+  { nameKey: "tier.wall",     startTime: 85,  scrollSpeed: 258, gapSize: 105, spawnInterval: 1.5,  palette: PALETTES["tier.wall"],     essence: "denseStand" },
   // half 45.5: the narrowest the game ever gets, final plateau. Measured clean
   // corridor ~15 px — demanding, but a real line rather than a pixel-perfect
   // stunt (at gapSize 88 it was down to 8 px).
-  { nameKey: "tier.moonEye",  startTime: 125, scrollSpeed: 268, gapSize: 96,  spawnInterval: 1.45, skyTop: 0x0d0a1f, skyBottom: 0x33205c, essence: "denseStand", invertContrast: true }
+  { nameKey: "tier.moonEye",  startTime: 125, scrollSpeed: 268, gapSize: 96,  spawnInterval: 1.45, palette: PALETTES["tier.moonEye"],  essence: "denseStand", invertContrast: true }
 ];
 
 /** Sky colours actually used by a tier, once the inversion toggle is applied. */
 export function tierSky(tier: Tier): { top: number; bottom: number } {
   return MOON_EYE.enabled && tier.invertContrast
     ? { top: MOON_EYE.skyTop, bottom: MOON_EYE.skyBottom }
-    : { top: tier.skyTop, bottom: tier.skyBottom };
+    : { top: tier.palette.skyTop, bottom: tier.palette.skyBottom };
+}
+
+/** The graze halo actually used by a tier, once the inversion is applied. */
+export function tierHalo(tier: Tier): number {
+  return MOON_EYE.enabled && tier.invertContrast ? MOON_EYE.haloColor : tier.palette.haloColor;
 }
 
 /** Staging of tier changes. */
@@ -605,7 +695,24 @@ export const MOON_EYE = {
   haloAlphaScale: 1.6,
   scoreColor: "#241a08",
   multiplierColor: "#4a2d8f",
-  magicBarColor: 0x4a2d8f
+  /**
+   * The combo timer under inversion. It used to flip to the same dark violet
+   * as everything else, which quietly broke an invariant: the timer is WARM and
+   * the progress thread is COLD, and they must never be confused. On pale gold
+   * both ended up violet — a measured hue gap of 1 degree. A burnt amber keeps
+   * the timer warm (hue 24) against the thread's violet (hue 255): 129 degrees
+   * apart, against 139 on the dark palettes.
+   */
+  magicBarColor: 0x8a3d0a,
+  /**
+   * The progress thread under inversion. Light violet on pale gold measured a
+   * contrast of 2.03; these dark violets restore it to 3.93 while keeping the
+   * thread unmistakably cold.
+   */
+  threadTrackColor: 0x4a3a80,
+  threadTickColor: 0x3f2f70,
+  threadNotchColor: 0x3a2a6b,
+  threadDotColor: 0x3a2a6b
 } as const;
 
 /**
@@ -1311,6 +1418,145 @@ if (import.meta.env.DEV) {
           `${NEAR_MISS.grazeRadius}px graze ring — crossing without grazing ` +
           `would be impossible there. Raise gapSize above ` +
           `${NEAR_MISS.grazeRadius * 2 + jitter}.`
+      );
+    }
+  }
+}
+
+/**
+ * Palette contrast floor — the number the dev assertion below enforces.
+ *
+ * Measured as a WCAG contrast RATIO between the graze halo composited over the
+ * sky at its real alpha and the bare sky next to it. That composite is what the
+ * player's eye actually compares, so it is what has to be checked: the raw
+ * halo-vs-sky colour distance flatters a 15 %-alpha fill enormously.
+ *
+ * 1.14 is calibrated, not invented: the single-halo version that shipped before
+ * per-tier palettes measured 1.147 at its worst (The Wall, top of gradient,
+ * fully cooled). The floor sits just under that, so no palette may ever be
+ * worse than what the game already had, and the five shipped palettes clear it
+ * with 1.159 at their worst (The Dark Wood, top, cooled).
+ */
+export const HALO_CONTRAST_MIN = 1.14;
+
+// --- Guard rail (dev only): every palette must keep its graze halo readable,
+// and the hue arc must not double back.
+//
+// The readability of the halo is an INVARIANT (see CLAUDE.md): it is the main
+// teacher of the graze rule, so a palette that swallows it is not a style
+// choice, it is a broken game. Authoring a sky is exactly when this gets
+// broken, which is why the check lives next to the palettes.
+if (import.meta.env.DEV) {
+  const channels = (c: number) => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+  const toLinear = (v: number) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  const relLuminance = (c: number) => {
+    const [r, g, b] = channels(c).map(toLinear);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a: number, b: number) => {
+    const la = relLuminance(a);
+    const lb = relLuminance(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  };
+  /** The halo as it is actually painted: alpha-composited over the sky. */
+  const composite = (fg: number, bg: number, alpha: number) => {
+    const f = channels(fg);
+    const b = channels(bg);
+    const out = [0, 1, 2].map((i) => Math.round(alpha * f[i] + (1 - alpha) * b[i]));
+    return (out[0] << 16) | (out[1] << 8) | out[2];
+  };
+  /** Mirrors coolDesat() in FlightScene, plus the palette's luminance drop. */
+  const cooled = (color: number, k: number, valueDrop: number) => {
+    const [r, g, b] = channels(color);
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    const f = 1 - k * valueDrop;
+    const out = [
+      (r + (lum * 0.8 - r) * k) * f,
+      (g + (lum * 0.95 - g) * k) * f,
+      Math.min(255, b + (Math.min(255, lum * 1.25) - b) * k) * f
+    ].map((v) => Math.round(Math.max(0, Math.min(255, v))));
+    return (out[0] << 16) | (out[1] << 8) | out[2];
+  };
+  const hueOf = (c: number) => {
+    const [r, g, b] = channels(c).map((v) => v / 255);
+    const max = Math.max(r, g, b);
+    const d = max - Math.min(r, g, b);
+    if (d < 1e-6) return 0;
+    const h = max === r ? 60 * (((g - b) / d) % 6) : max === g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4);
+    return ((h % 360) + 360) % 360;
+  };
+
+  for (const tier of TIERS) {
+    const sky = tierSky(tier);
+    const halo = tierHalo(tier);
+    const alpha =
+      FEEDBACK.haloAlpha *
+      (MOON_EYE.enabled && tier.invertContrast ? MOON_EYE.haloAlphaScale : 1);
+    // Both ends of the gradient, and both lit and fully cooled: the halo has to
+    // survive every state the sky passes through while the tier is on screen.
+    for (const [where, base] of [
+      ["top", sky.top],
+      ["bottom", sky.bottom]
+    ] as const) {
+      for (const [light, k] of [
+        ["lit", 0],
+        ["cooled", MAGIC.desatMax]
+      ] as const) {
+        const bg = cooled(base, k, tier.palette.coolValueDrop);
+        const seen = ratio(composite(halo, bg, alpha), bg);
+        if (seen < HALO_CONTRAST_MIN) {
+          throw new Error(
+            `TIERS "${tier.nameKey}": the graze halo is invisible against its own sky — ` +
+              `contrast ${seen.toFixed(3)} at the ${where} of the gradient (${light}), ` +
+              `below the documented floor of ${HALO_CONTRAST_MIN}. The halo is how the ` +
+              `game teaches grazing: brighten palette.haloColor, or pull the sky's ` +
+              `luminance away from it.`
+          );
+        }
+      }
+    }
+  }
+
+  // The hue arc must advance in ONE direction, or a 2 s tier transition drags
+  // the sky the long way round through mud. Checked on the EFFECTIVE skies, so
+  // the check follows MOON_EYE.enabled rather than the authored fallback.
+  for (const band of ["top", "bottom"] as const) {
+    const hues = TIERS.map((tier) => hueOf(tierSky(tier)[band]));
+    let sweep = 0;
+    for (let i = 1; i < hues.length; i++) {
+      const step = ((hues[i] - hues[i - 1]) % 360 + 360) % 360;
+      if (step === 0 || step >= 140) {
+        throw new Error(
+          `TIERS palette arc (${band} of the gradient): the step from ` +
+            `"${TIERS[i - 1].nameKey}" to "${TIERS[i].nameKey}" is ${step.toFixed(0)} degrees. ` +
+            `Each step must advance in the same direction and stay under 140, or the ` +
+            `sky interpolation crosses a muddy neutral on the way.`
+        );
+      }
+      sweep += step;
+    }
+    if (sweep > 260) {
+      throw new Error(
+        `TIERS palette arc (${band}): total sweep ${sweep.toFixed(0)} degrees exceeds 260 — ` +
+          `the palettes are wrapping most of the way round the wheel.`
+      );
+    }
+  }
+
+  // Saturation reserve: the combo-loss cooling must stay perceptible on every
+  // palette. It is spent EITHER as desaturation (needs saturation to spend) OR
+  // as a luminance drop, which is how a drained palette like The Wall pays.
+  for (const tier of TIERS) {
+    const p = tier.palette;
+    if (p.saturation < 0.2 && p.coolValueDrop < 0.25) {
+      throw new Error(
+        `TIERS "${tier.nameKey}": palette saturation ${p.saturation} leaves nothing for the ` +
+          `combo-loss desaturation to eat, and coolValueDrop is only ${p.coolValueDrop}. ` +
+          `A palette this cold must pay the cooling in brightness instead — raise ` +
+          `coolValueDrop to at least 0.25.`
       );
     }
   }

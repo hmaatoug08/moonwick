@@ -356,6 +356,111 @@ Each silhouette is split into a **shaft** frame and a **tip** frame because they
 
 ---
 
+## The chromatic arc — one palette per tier
+
+Each tier owns a `TierPalette`: sky gradient, scenery tint, base saturation, and
+its own graze halo. Rendering only, on exactly the same terms as `essence` — the
+forest may change colour, never shape.
+
+### Why the hues only ever move one way
+
+A tier change interpolates the sky in RGB over 2 s. RGB interpolation is a
+straight line through the colour cube, so two hues far apart on the wheel meet
+somewhere near the grey axis on the way: violet to teal passes through a dead
+slate, wine to blue through a brown. Holding the arc to one direction —
+~208 -> 251 -> 293 -> 322 -> 345 on the gradient tops, 194 -> 261 -> 303 -> 329
+-> 351 on the bottoms — keeps every step short (7° to 43°) and every crossing
+inside the same family. The dev assertion caps a step at 140° and the whole
+sweep at 260°, so the next palette someone authors cannot quietly reintroduce
+the long way round.
+
+The order the tiers happen to want — teal, violet, wine, ink, gold — is why the
+direction is forced rather than chosen. The Wall was specified as "blue-black",
+and blue would have meant going *back* from the Brambles' wine. It is a
+plum-ink instead: at saturation 0.12 and that lightness the difference between
+plum-black and blue-black is not visible, and keeping the arc intact is worth
+more than the word. It also shortens the run into the pale gold that follows.
+
+### Why The Edge is not actually brighter
+
+"Light and luminous" was the brief, and the first attempt took it literally: a
+teal bottom at HSL lightness 0.33. Two measurements killed it. The graze halo
+composited over that sky came out at a contrast of **1.017** — the halo, which
+is the only thing teaching the graze rule, was gone. And the sky landed on the
+witch's own body luminance, dropping her body contrast to **1.03** against a
+shipped worst of 1.208.
+
+The cause is that relative luminance is not lightness: the green channel carries
+0.7152 of it, so a cyan at a given HSL lightness is far brighter than a violet
+at the same number. A 369-point sweep of the Edge bottom (hue x saturation x
+lightness) found solutions only at lightness 0.10-0.12 — i.e. at the same
+*luminance* as the violet it replaces.
+
+So The Edge reads open and airy through HUE alone. That is the general rule the
+palettes follow: luminance is held roughly constant tier to tier, because
+luminance is what the halo and the witch are measured against, and colour is
+free to move.
+
+### Why colour drains at The Wall
+
+Losing the combo cools the scenery: it desaturates towards blue-grey. That
+spends saturation, and The Wall has almost none — 0.12, the lowest of the five,
+deliberately, because it is the tier where the forest stops having a colour.
+
+Measured, its cooling moves saturation by **-0.02** (it very slightly *gains*):
+the one tier where the loss would have been invisible is the tier the player is
+most likely to lose it on. `coolValueDrop` is the answer — the fraction of the
+cooling paid as a luminance drop instead. At 0.34 the Wall's lit-to-cooled
+contrast goes from 1.002 to **1.043**, which puts it in the same band as the
+Dark Wood (1.039) and the Brambles (1.051). Same event, same legibility,
+different currency. A dev assertion refuses a palette under 0.2 saturation that
+does not compensate this way, so "drained" can never quietly mean "silent".
+
+The Moon's Eye is the mirror case and takes `coolValueDrop` 0: pale gold going
+blue-grey is a saturation swing of 0.18, plainly visible on its own, and
+darkening it would have eaten the contrast of the dark rim the inversion relies
+on (measured: 4.52 -> 3.69).
+
+### The contrast checks, and what they found
+
+Every palette was measured with the runtime's own maths — `coolDesat` verbatim,
+real alpha compositing, WCAG relative luminance — at both ends of the gradient,
+lit and fully cooled. Twenty sky states in all.
+
+- **Halo** (the invariant): worst **1.159**, at the Dark Wood's top when cooled.
+  The floor is 1.14, calibrated just under the 1.147 the single-halo version
+  measured at its worst, so a palette can never be worse than what shipped.
+- **The witch** needed no correction once The Edge sat at the right luminance:
+  body 1.22-8.03, and the rim that actually applies 4.52-11.28 (the inverted
+  tier uses `MOON_EYE.rimColor`, a dark edge, not the silver-violet glow — the
+  first measurement compared the wrong rim and reported a false collapse). Her
+  fill is not the guarantee and never was; the rim is.
+- **The HUD** was the one real casualty. Under inversion the timer used to flip
+  to the same dark violet as everything else, leaving it **1° of hue** from the
+  progress thread — the warm/cold pair that CLAUDE.md declares must never be
+  confused had silently collapsed on the last tier. The timer is now a burnt
+  amber (hue 24) and the thread a dark violet (hue 255): 129° apart, with the
+  thread's dot switching from additive to normal blending, since adding light to
+  a pale sky does nothing. Requirement met by moving the HUD, not the palette.
+
+### The one thing these palettes do not fix
+
+The Wall -> Moon's Eye transition drops the halo to a contrast of **1.001**
+mid-crossing. It is not a regression: the shipped single-halo version measures
+**1.006** in the same window, and interpolating the halo colour alongside the sky
+makes it marginally worse (1.004).
+
+The reason is structural. As the sky sweeps from near-black to pale gold it must
+pass *through* the halo's own luminance, and compositing a colour onto a
+background of equal luminance yields that same luminance at any alpha — contrast
+1.000, unreachable by tuning. Fixing it needs the halo to switch polarity
+part-way through the crossing, keeping it far from the sky's luminance on both
+sides, which is a change to the art direction rather than to a palette. Left
+alone, deliberately, and the dev assertion is therefore scoped to each palette's
+steady states — the property requirement 3 actually describes.
+
+---
+
 ## Art direction — "Moonlight & ink"
 
 The interface speaks through TYPE, HAIRLINES and SPACE — never through boxes.
